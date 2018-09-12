@@ -35,8 +35,8 @@ NVFLAGS    = -arch=sm_$(NVARCH) -lcublas -lcurand
 # Files to compile: 
 #
 
-MAIN   = main.cu
-CODC   = #files.c
+MAIN   = main.cu 
+CODC   = files.c
 CODCPP = #files.cpp
 CODCU  = #ngen-kutral.cu setup.cu
 
@@ -74,11 +74,11 @@ $(OBJMAIN): $(SRCMAIN)
 $(OBJCPP): $(DEST)%.o : $(SRC)%.cpp
 	$(CP) $(CPPFLAGS) -c $? -o $@
 
-$(OBJCU): $(DEST)%.o : $(SRC)%.cu
-	$(NVCC) $(NVFLAGS) -dc $? -o $@
-
 $(OBJC): $(DEST)%.o : $(SRC)%.c
 	$(CC) $(CFLAGS) -c $? -o $@
+
+$(OBJCU): $(DEST)%.o : $(SRC)%.cu
+	$(NVCC) $(NVFLAGS) -dc $? -o $@
 
 #
 # Makefile for cleaning
