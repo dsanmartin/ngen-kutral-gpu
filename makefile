@@ -29,7 +29,7 @@ CPPFLAGS  = -Wall
 #
 
 NVARCH	   = 35
-NVFLAGS    = -arch=sm_$(NVARCH) -lcublas -lcurand
+NVFLAGS    = -arch=sm_$(NVARCH) -lcublas #-lcurand
 
 #
 # Files to compile: 
@@ -38,7 +38,7 @@ NVFLAGS    = -arch=sm_$(NVARCH) -lcublas -lcurand
 MAIN   = main.cu 
 CODC   = files.c
 CODCPP = #files.cpp
-CODCU  = #ngen-kutral.cu setup.cu
+CODCU  = solver.cu
 
 #
 # Formating the folder structure for compiling/linking/cleaning.
