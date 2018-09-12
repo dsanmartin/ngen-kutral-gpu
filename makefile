@@ -16,6 +16,7 @@ CC     = g++#gcc
 CP     = g++
 NVCC   = nvcc
 RM     = rm
+MKDIR  = mkdir -p
 
 #
 # C/C++ flags
@@ -59,11 +60,13 @@ OBJCU  = $(patsubst %.cu,$(DEST)$(FCU)%.o,$(CODCU))
 SRCMAIN = $(patsubst %,$(SRC)%,$(MAIN))
 OBJMAIN = $(patsubst $(SRC)%.cu,$(DEST)%.o,$(SRCMAIN))
 
+# .PHONY: directories
+
 #
 # The MAGIC
 #
 
-all:  $(BIN)$(EXE)
+all: $(BIN)$(EXE)
 
 $(BIN)$(EXE): $(OBJC) $(OBJCPP) $(OBJCU) $(OBJMAIN)
 	$(NVCC) $(NVFLAGS) $^ -o $@
@@ -80,6 +83,11 @@ $(OBJC): $(DEST)%.o : $(SRC)%.c
 $(OBJCU): $(DEST)%.o : $(SRC)%.cu
 	$(NVCC) $(NVFLAGS) -dc $? -o $@
 
+
+dirs:
+	$(MKDIR) $(DEST)$(FC) 
+	$(MKDIR) $(DEST)$(FCPP)
+	$(MKDIR) $(DEST)$(FCU)  
 #
 # Makefile for cleaning
 # 
