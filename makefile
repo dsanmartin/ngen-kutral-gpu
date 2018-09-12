@@ -12,7 +12,7 @@ EXE    = ngen-kutral
 # Executables
 #
 
-CC     = gcc
+CC     = g++#gcc
 CP     = g++
 NVCC   = nvcc
 RM     = rm
@@ -21,7 +21,7 @@ RM     = rm
 # C/C++ flags
 #
 
-CFLAGS    = -Wall
+CFLAGS    = -Wall #-std=c99 
 CPPFLAGS  = -Wall
 
 #

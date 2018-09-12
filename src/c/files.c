@@ -4,10 +4,11 @@
 
 void hola() {
   printf("hola");
+  // test
 }
 
 void readInput(double *A, int rows, int cols) {
-  //int c;
+  //int i, j;
   FILE *file;
   file = fopen("Inputs/test.txt", "r");
   for(int i = 0; i < rows; i++) {
