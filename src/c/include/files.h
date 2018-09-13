@@ -1,12 +1,13 @@
 #ifndef FILES_H
 #define FILES_H
 
-void printMatrix(const float *A, int rows, int cols);
-void readConfig(const char *filename, int *Nx, int *Ny, 
-  float *xmin, float *xmax, float *ymin, float *ymax, 
-  int *Tmax, float *dt, float *kappa, float *epsilon, 
-  float *upc, float *q, float *alpha);
+void printMatrix(const double *A, int rows, int cols);
+void printApproximations(const double *A, int Nx, int Ny, int T);
+// void readConfig(const char *filename, int *Nx, int *Ny, 
+//   double *xmin, double *xmax, double *ymin, double *ymax, 
+//   int *Tmax, double *dt, double *kappa, double *epsilon, 
+//   double *upc, double *q, double *alpha);
 void readConf(const char *filename);
-void readInput(const char *filename, float *A, int rows, int cols);
+void readInput(const char *filename, double *A, int rows, int cols);
 
 #endif

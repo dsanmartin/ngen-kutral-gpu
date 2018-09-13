@@ -85,6 +85,7 @@ $(OBJCU): $(DEST)%.o : $(SRC)%.cu
 
 
 directories:
+	$(MKDIR) $(BIN)
 	$(MKDIR) $(DEST)$(FC) 
 	$(MKDIR) $(DEST)$(FCPP)
 	$(MKDIR) $(DEST)$(FCU)  
