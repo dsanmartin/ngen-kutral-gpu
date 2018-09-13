@@ -66,7 +66,7 @@ OBJMAIN = $(patsubst $(SRC)%.cu,$(DEST)%.o,$(SRCMAIN))
 # The MAGIC
 #
 
-all: $(BIN)$(EXE)
+all: directories $(BIN)$(EXE) clean
 
 $(BIN)$(EXE): $(OBJC) $(OBJCPP) $(OBJCU) $(OBJMAIN)
 	$(NVCC) $(NVFLAGS) $^ -o $@
@@ -84,7 +84,7 @@ $(OBJCU): $(DEST)%.o : $(SRC)%.cu
 	$(NVCC) $(NVFLAGS) -dc $? -o $@
 
 
-dirs:
+directories:
 	$(MKDIR) $(DEST)$(FC) 
 	$(MKDIR) $(DEST)$(FCPP)
 	$(MKDIR) $(DEST)$(FCU)  
@@ -97,6 +97,7 @@ clean:
 	$(RM) -rf $(DEST)$(FC)*.o
 	$(RM) -rf $(DEST)$(FCPP)*.o
 	$(RM) -rf $(DEST)$(FCU)*.o
+	$(RM) -rf $(DEST)
 
 fresh:
 	$(RM) -rf outputs/*

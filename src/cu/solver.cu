@@ -1,8 +1,7 @@
 #include "include/solver.cuh"
 #include "../c/include/files.h"
 
-// Multiply the arrays A and B on GPU and save the result in C
-// C(m,n) = A(m,k) * B(k,n)
+// Multiply the arrays A and B on GPU and save the result in C, C(m,n) = A(m,k) * B(k,n)
 void gpuBlasMmul(const float *A, const float *B, float *C, const int m, const int k, const int n) {
 	int lda=m,ldb=k,ldc=m;
 	const float alf = 1;
@@ -16,7 +15,7 @@ void gpuBlasMmul(const float *A, const float *B, float *C, const int m, const in
 
 	// Do the actual multiplication
 	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
-
+	
 	// Destroy the handle
 	cublasDestroy(handle);
 }

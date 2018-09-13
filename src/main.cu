@@ -1,19 +1,25 @@
-// Low level matrix multiplication on GPU using CUDA with CURAND and CUBLAS
-// C(m,n) = A(m,k) * B(k,n)
 #include <stdio.h>
-#include <cstdlib>
 #include <stdlib.h>
 #include <time.h>
-//#include <cublas_v2.h>
 #include "c/include/files.h"
 #include "cu/include/solver.cuh"
 
 int main() {
+	// Parameters
+	int *Nxx, *Ny, *Tmax;
+	float *xmin, *xmax, *ymin, *ymax, *dt, *kap, *eps, *upc, *q, *alp;
+	int *Nx;// = (int*) malloc(sizeof(int));
+
+	readConfig("test/config.txt", Nx, Ny, xmin, xmax, ymin, ymax, Tmax, 
+		dt, kap, eps, upc, q, alp);
+
+	printf("Nx: %d", Nx);
+
 	// Allocate 3 arrays on CPU
 	int rows_U, cols_U, rows_V, cols_V;
 
 	// for simplicity we are going to use square arrays
-	int N = 10000;
+	int N = 100;
 	rows_U = N;
 	cols_U = N;
 	rows_V = N;
@@ -23,8 +29,11 @@ int main() {
 	float *h_V = (float *)malloc(rows_V * cols_V * sizeof(float));
 	float *h_C = (float *)malloc(rows_U * cols_V * sizeof(float));
 
-	readInput("Inputs/U.txt", h_U, rows_U, cols_U);
-	readInput("Inputs/V.txt", h_V, rows_V, cols_V);
+	//readInput("test/U.txt", h_U, rows_U, cols_U);
+	//readInput("test/V.txt", h_V, rows_V, cols_V);
+
+	//char *line;
+	//readConf("test/config.txt"); 
 
   //printf("U=\n");
 	//printMatrix(h_U, rows_U, cols_U);
