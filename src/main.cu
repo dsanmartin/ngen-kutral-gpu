@@ -4,7 +4,7 @@
 #include "c/include/files.h"
 #include "cu/include/solver.cuh"
 
-int main() {
+int main(int argc, char *argv[]) {
 	// Parameters
 	/*
 	int *Nxx, *Ny, *Tmax;
@@ -20,10 +20,14 @@ int main() {
 	// Allocate 3 arrays on CPU
 	//int rows_U, cols_U, rows_V, cols_V;
 
+	/* Parameters */
+	double kappa = atof(argv[1]);//1e-3;
+	double dx = 0.1, dy = 0.1, dt = atof(argv[2]);
+
 	/* Domain definition */
-	int Nx = 5; // x axis in matrix columns
-	int Ny = 5; // y axis in matrix rows
-	int T = 5;
+	int Nx = 128; // x axis in matrix columns
+	int Ny = 128; // y axis in matrix rows
+	int T = 50;
 
 	// for simplicity we are going to use square arrays
 	// int N = 5;
@@ -44,9 +48,9 @@ int main() {
 	double *h_U = (double *)malloc(Nx * Ny * T * sizeof(double));
 
 	/* Read initial conditions */
-	readInput("test/U_5.txt", h_U0, Ny, Nx);
-	readInput("test/V_5.txt", h_V1, Ny, Nx);
-	readInput("test/V_5.txt", h_V2, Ny, Nx);
+	readInput("test/U128.txt", h_U0, Ny, Nx);
+	//readInput("test/V_5.txt", h_V1, Ny, Nx);
+	//readInput("test/V_5.txt", h_V2, Ny, Nx);
 
 	//char *line;
 	//readConf("test/config.txt"); 
@@ -63,13 +67,14 @@ int main() {
 	//clock_t begin = clock();
 
 	//solver(h_U, h_V, h_C, rows_U, cols_U, rows_V, cols_V);
-	solver(h_U0, h_V1, h_V2, h_U, Nx, Ny, T);
+	solver(h_U0, h_V1, h_V2, h_U, Nx, Ny, T, dx, dy, dt, kappa);
 
 	//clock_t end = clock();
 	//double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
 
-	printf("U=\n");
-	printApproximations(h_U, Nx, Ny, T);
+	//printf("U=\n");
+	//printApproximations(h_U, Nx, Ny, T);
+	saveApproximation("test/output/Ua.txt", h_U, Nx, Ny, T);
 	
 	//printf("Time: %lf\n", time_spent);
 

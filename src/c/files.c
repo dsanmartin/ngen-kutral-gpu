@@ -78,3 +78,18 @@ void readInput(const char *filename, double *A, int rows, int cols) {
   fclose(file);
 }
 
+/* Print approximations matrices */
+void saveApproximation(const char *filename, const double *A, int Nx, int Ny, int T) {
+	//printf("save approx");
+	FILE *f = fopen(filename, "w");
+	for (int k = 0; k < T; k++) {
+		for (int i = 0; i < Ny; i++) {
+			for (int j = 0; j < Nx; j++) {
+				fprintf(f, "%lf ", A[k * Nx * Ny + j * Nx + i]);	
+			}
+			fprintf(f, "\n");
+		}
+		//fprintf(f, "\n");
+	}
+	//fprintf(f, "\n");
+}

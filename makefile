@@ -39,7 +39,7 @@ NVFLAGS    = -arch=sm_$(NVARCH) -lcublas #-lcurand
 MAIN   = main.cu 
 CODC   = files.c
 CODCPP = #files.cpp
-CODCU  = solver.cu
+CODCU  = solver.cu diffmat.cu
 
 #
 # Formating the folder structure for compiling/linking/cleaning.
