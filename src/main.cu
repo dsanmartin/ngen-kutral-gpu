@@ -58,8 +58,8 @@ int main(int argc, char *argv[]) {
 
 	/* Read initial conditions */
 	readInput("test/U128.txt", h_U0, Ny, Nx);
-	//readInput("test/V_5.txt", h_V1, Ny, Nx);
-	//readInput("test/V_5.txt", h_V2, Ny, Nx);
+	readInput("test/V1128.txt", h_V1, Ny, Nx);
+	readInput("test/V2128.txt", h_V2, Ny, Nx);
 
 	//char *line;
 	//readConf("test/config.txt"); 
