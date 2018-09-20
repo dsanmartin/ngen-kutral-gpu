@@ -109,7 +109,6 @@ void RHS(double *Unew, double *Uold, double *V1, double *V2, double *Dx, double 
 
 	// Compute: -v1 * dt U_old * D_x^T + (diffusion - y convection)
 	cublasDgemm(handle4, CUBLAS_OP_N, CUBLAS_OP_T, Ny, Nx, Nx, av1, Uold, lda, Dx, ldb, beta, Unew, ldc);
-
 	/* End convection computation */
 
 	// Destroy the handles
@@ -174,17 +173,22 @@ void solver(double *h_U0, double *h_V1, double *h_V2, double *h_U, int Nx, int N
 		RHS(&d_U[t * Nx * Ny], &d_U[(t - 1) * Nx * Ny], d_V1, d_V2, d_Dx, d_Dy, d_Dxx, d_Dyy, d_tmp, kappa, dt, Nx, Ny);
 	}
 	
-	// Copy from GPU to CPU
+	// Copy from device to host
 	cudaMemcpy(h_U, d_U, T * Ny * Nx * sizeof(double), cudaMemcpyDeviceToHost);
 
-	// Free GPU memory
+	// Free device memory
 	cudaFree(d_U);
 	cudaFree(d_V1);
 	cudaFree(d_V2);
+	cudaFree(d_Dx);
+	cudaFree(d_Dy);
 	cudaFree(d_Dxx);
 	cudaFree(d_Dyy);
 	cudaFree(d_tmp);
 
+	// Free host memory
+	free(h_Dx);
+	free(h_Dy);
 	free(h_Dxx);
 	free(h_Dyy);
 	free(h_tmp);
