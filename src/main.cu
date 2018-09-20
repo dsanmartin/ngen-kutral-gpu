@@ -22,12 +22,21 @@ int main(int argc, char *argv[]) {
 
 	/* Parameters */
 	double kappa = atof(argv[1]);//1e-3;
-	double dx = 0.1, dy = 0.1, dt = atof(argv[2]);
+	double dt = atof(argv[2]);
+	printf("kappa: %.8f, dt: %.8f\n", kappa, dt);
+	double xmin = 0;
+	double xmax = 90;
+	double ymin = 0;
+	double ymax = 90;
 
 	/* Domain definition */
 	int Nx = 128; // x axis in matrix columns
 	int Ny = 128; // y axis in matrix rows
-	int T = 50;
+	int T = 5000;
+
+	double dx = (xmax - xmin) / Nx;
+	double dy = (ymax - ymin) / Ny;
+	printf("dx: %.8f, dy: %.8f\n", dx, dy);
 
 	// for simplicity we are going to use square arrays
 	// int N = 5;
