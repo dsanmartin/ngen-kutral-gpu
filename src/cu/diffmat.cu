@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include "include/diffmat.cuh"
 
-
 /* First derivative finite difference matrix */
 void FD1(double *D1N, int N, double h) {
   for (int i = 0; i < N; i++) {
