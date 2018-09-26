@@ -84,12 +84,12 @@ void saveApproximation(const char *filename, const double *A, int Nx, int Ny, in
 	FILE *f = fopen(filename, "w");
 	for (int k = 0; k < T; k++) {
 		if (k % 500 == 0) {
-		for (int i = 0; i < Ny; i++) {
-			for (int j = 0; j < Nx; j++) {
-				fprintf(f, "%lf ", A[k * Nx * Ny + j * Nx + i]);	
+			for (int i = 0; i < Ny; i++) {
+				for (int j = 0; j < Nx; j++) {
+					fprintf(f, "%lf ", A[k * Nx * Ny + j * Nx + i]);	
+				}
+				fprintf(f, "\n");
 			}
-			fprintf(f, "\n");
-		}
 		}
 		//fprintf(f, "\n");
 	}
