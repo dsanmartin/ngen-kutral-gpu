@@ -4,6 +4,32 @@
 #include "c/include/files.h"
 #include "cu/include/solver.cuh"
 
+// int main(int argc, char *argv[]) {
+// 	int m = 128;
+// 	int n = 128;
+	
+// 	double *A = (double *)malloc(m * n * sizeof(double)); 
+// 	double *B = (double *)malloc(m * n * sizeof(double)); 
+// 	double *C = (double *)malloc(m * m * sizeof(double)); 
+// 	readInput("test/A.txt", A, m, n);
+// 	readInput("test/B.txt", B, n, m);
+// 	//printf("A: \n");
+// 	//printMatrix(A, m, n);
+// 	//printf("\nB: \n");
+// 	//printMatrix(B, n, m);
+
+// 	matmul(A, B, C, m, n);
+
+// 	//printf("\nC: \n");
+// 	//printMatrix(C, m, m);
+// 	saveApproximation("test/C.txt", C, m, m, 1);
+// 	free(A);
+// 	free(B);
+// 	free(C);
+
+// 	return 0;
+// }
+
 int main(int argc, char *argv[]) {
 	// Parameters
 	/*
@@ -65,24 +91,11 @@ int main(int argc, char *argv[]) {
 	readInput("test/V1128.txt", h_V1, Ny, Nx); // W1
 	readInput("test/V2128.txt", h_V2, Ny, Nx); // W2
 
-  // printf("B0=\n");
-	// printMatrix(h_B0, Ny, Nx);
-
-	//clock_t begin = clock();
-
-	//solver(h_U, h_V, h_C, rows_U, cols_U, rows_V, cols_V);
 	solver(h_U0, h_B0, h_V1, h_V2, h_U, h_B, Nx, Ny, T, dx, dy, dt, kappa, epsilon, upc, q, alpha);
 
-	//clock_t end = clock();
-	//double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-
-	//printf("U=\n");
-	//printApproximations(h_U, Nx, Ny, T);
 	saveApproximation("test/output/Ua.txt", h_U, Nx, Ny, T);
 	saveApproximation("test/output/Ba.txt", h_B, Nx, Ny, T);
 	
-	//printf("Time: %lf\n", time_spent);
-
 	// Free CPU memory
 	free(h_U0);
 	free(h_B0);

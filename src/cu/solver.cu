@@ -18,7 +18,31 @@ __device__ double g(double u, double b, double epsilon, double q, double upc) {
 	return -s(u, upc) * (epsilon / q) * b * exp(u /(1 + epsilon * u));
 }
 
-__global__ void f_kernel(const double* __restrict__ d_U, const double* __restrict__ d_B, double *d_F, 
+__global__ void transposeKernel(const double *A, double *AT, int m, int n) {
+  int tId = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tId < m * n) {
+    int i = tId % m; // Row index
+    int j = tId / m; // Col index
+    AT[i * n + j] = A[j * m + i];
+  }
+}
+
+__global__ void matmulKernel(const double *A, const double *B, double *C, int m, int n) {
+  int tId = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tId < m * n) {
+    int i = tId % m; // Row index
+    int j = tId / m; // Col index
+    double c = 0;
+    
+    for (int k = 0; k < n; k++) {
+      c += A[k * m + i] * B[j * n + k];
+    }
+
+    C[tId] = c;
+  }
+}
+
+__global__ void fKernel(const double* __restrict__ d_U, const double* __restrict__ d_B, double *d_F, 
 	double alpha, double epsilon, double upc, int Nx, int Ny) {
 	
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
@@ -27,19 +51,12 @@ __global__ void f_kernel(const double* __restrict__ d_U, const double* __restric
 	}
 }
 
-__global__ void g_kernel(const double* __restrict__ d_U, const double* __restrict__ d_B, double *d_G, 
-	double epsilon, double q, double upc, double dt, int Nx, int Ny) {
+__global__ void gKernel(const double* __restrict__ d_U, const double* __restrict__ d_B, double *d_G, 
+	double epsilon, double q, double upc, int Nx, int Ny) {
 	
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tId < Ny * Nx) {
-		d_G[tId] = d_B[tId] + dt * g(d_U[tId], d_B[tId], epsilon, q, upc);
-	}
-}
-
-__global__ void fuel(const double* __restrict__ d_F, const double* __restrict__ d_tmp, double *d_U, double dt, int Nx, int Ny) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	if (tId < Ny * Nx) {
-		d_U[tId] = dt * d_F[tId] + d_tmp[tId];
+		d_G[tId] = g(d_U[tId], d_B[tId], epsilon, q, upc);
 	}
 }
 
@@ -48,9 +65,9 @@ __global__ void fuel(const double* __restrict__ d_F, const double* __restrict__ 
 __global__ void h1(double *U, int Nx, int Ny) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tId < Ny * Nx) {
-		int i = tId % Nx;
-		int j = tId / Nx;
-		if (i == 0 || i == (Nx-1) || j == 0 || j == (Ny-1))
+		int i = tId % Ny;
+		int j = tId / Ny;
+		if (i == 0 || i == (Ny-1) || j == 0 || j == (Nx-1))
 			U[j + i * Nx] = 0;
 	}
 }
@@ -59,119 +76,150 @@ __global__ void h1(double *U, int Nx, int Ny) {
 __global__ void h2(double *B, int Nx, int Ny) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tId < Ny * Nx) {
-		int i = tId % Nx;
-		int j = tId / Nx;
-		if (i == 0 || i == (Nx-1) || j == 0 || j == (Ny-1))
+		int i = tId % Ny;
+		int j = tId / Ny;
+		if (i == 0 || i == (Ny-1) || j == 0 || j == (Nx-1))
 			B[j + i * Nx] = 0;
 	}
 }
 
+__global__ void RHSKernel(double *Uold, double *Bold, double *V1, double *V2, double *Ux, double *Uy, 
+	double *Uxx, double *Uyy, double *F, double *G, double *Unew, double *Bnew, double kappa, double epsilon, double upc, double q, double alpha, 
+	double dt, int Nx, int Ny) {
+		
+		int tId = threadIdx.x + blockIdx.x * blockDim.x;
+		if (tId < Ny * Nx) {
+			double diffusion = kappa  * (Uxx[tId] + Uyy[tId]);
+			double convection = V1[tId] * Ux[tId] + V2[tId] * Uy[tId];
+			double reaction = F[tId];			
+			Unew[tId] = Uold[tId] + dt * (diffusion - convection + reaction);
+			Bnew[tId] = Bold[tId] + dt * G[tId];
+		}
+}
+
 void RHS(double *Unew, double *Uold, double *Bnew, double *Bold, double *V1, double *V2, double *Dx, double *Dy, 
-	double *Dxx, double *Dyy,	double *F, double kappa, double epsilon, double upc, double q, double alpha, 
+	double *Dxx, double *Dyy, double kappa, double epsilon, double upc, double q, double alpha, 
 	double dt, int Nx, int Ny) {
 
-	int lda=Ny, ldb=Nx, ldc=Ny;
-	const double alf = kappa * dt;
-	const double bet = 1;
-	const double *alph = &alf;
-	const double *beta = &bet;
-	const double v1 = -0.707107 * dt;
-	const double v2 = -0.707107 * dt; 
-	const double *av1 = &v1;
-	const double *av2 = &v2;
-	const double fdt = dt;
-	const double *ffdt = &fdt;
-
-	// For fuel
-	int size = Nx * Ny;
+	int size = Ny * Nx;
 	int block_size = 256;
 	int grid_size = (int) ceil((float)size / block_size);
 
-	/* Compute Fuel */
-	g_kernel<<<grid_size, block_size>>>(Uold, Bold, Bnew, epsilon, q, upc, dt, Nx, Ny);
-	/* End fuel computation */
+	double *DxT, *DxxT, *Ux, *UxT, *Uy, *Uxx, *UxxT, *Uyy, *F, *G;
+	double *d_DxT, *d_DxxT, *d_Ux, *d_UxT, *d_Uy, *d_Uxx, *d_UxxT, *d_Uyy, *d_F, *d_G;
 
-	// Create handles for CUBLAS
-	cublasHandle_t handle, handle2, handle3, handle4, handle5;
-	cublasCreate(&handle);
-	cublasCreate(&handle2);
-	cublasCreate(&handle3);
-	cublasCreate(&handle4);
-	cublasCreate(&handle5);
+	/* Host memory allocation*/
+	DxT = (double *)malloc(Nx * Nx * sizeof(double));
+	DxxT = (double *)malloc(Nx * Nx * sizeof(double));
+	Ux = (double *)malloc(Nx * Ny * sizeof(double));
+	UxT = (double *)malloc(Ny * Nx * sizeof(double));
+	Uy = (double *)malloc(Ny * Nx * sizeof(double));
+	Uxx = (double *)malloc(Nx * Ny * sizeof(double));
+	UxxT = (double *)malloc(Ny * Nx * sizeof(double));
+	Uyy = (double *)malloc(Ny * Nx * sizeof(double));
+	F = (double *)malloc(Ny * Nx * sizeof(double));
+	G = (double *)malloc(Ny * Nx * sizeof(double));
 
-	// For euler method, copy u_old to u_new
-	cudaMemcpy(Unew, Uold, Nx * Ny * sizeof(double), cudaMemcpyDeviceToDevice);
+	/* GPU memory allocation */
+	cudaMalloc(&d_DxT, Nx * Nx * sizeof(double));
+	cudaMalloc(&d_DxxT, Nx * Nx * sizeof(double));
+	cudaMalloc(&d_Ux, Nx * Ny * sizeof(double));
+	cudaMalloc(&d_UxT, Ny * Nx * sizeof(double));
+	cudaMalloc(&d_Uy, Ny * Nx * sizeof(double));
+	cudaMalloc(&d_Uxx, Nx * Ny * sizeof(double));
+	cudaMalloc(&d_UxxT, Ny * Nx * sizeof(double));
+	cudaMalloc(&d_Uyy, Ny * Nx * sizeof(double));
+	cudaMalloc(&d_F, Ny * Nx * sizeof(double));
+	cudaMalloc(&d_G, Ny * Nx * sizeof(double));
 
-	/* Compute Diffusion */
-	// Compute: kappa*dt D_yy U_old + "U_old"
-	cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, Ny, Nx, Nx, alph, Dyy, lda, Uold, ldb, beta, Unew, ldc);
+	/* Copy to GPU */
+	cudaMemcpy(d_DxT, DxT, Nx * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_DxxT, DxxT, Nx * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_Ux, Ux, Nx * Ny * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_UxT, UxT, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_Uy, Uy, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_Uxx, Uxx, Nx * Ny * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_UxxT, Uxx, Nx * Ny * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_Uyy, Uyy, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_F, F, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_G, G, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
+
+	/* Compute partial derivatives */
 	
-	// Wait first matrix multiplication to reuse it
-	cudaDeviceSynchronize();
-
-	// Compute: kappa*dt U_old D_xx^T + kappa*dt D_yy U_old + "U_old"
-	cublasDgemm(handle2, CUBLAS_OP_N, CUBLAS_OP_T, Ny, Nx, Nx, alph, Uold, lda, Dxx, ldb, beta, Unew, ldc);
-	/* End Diffusion computation */
-
-	// Wait diffusion computation
-	cudaDeviceSynchronize();
-
-	/* Compute Convection*/
-	// Compute: -v2 * dt D_y U_old + diffusion
-	cublasDgemm(handle3, CUBLAS_OP_N, CUBLAS_OP_N, Ny, Nx, Nx, av2, Dy, lda, Uold, ldb, beta, Unew, ldc);
-
-	// Wait for convection in y
-	cudaDeviceSynchronize();
-
-	// Compute: -v1 * dt U_old * D_x^T + (diffusion - y convection)
-	cublasDgemm(handle4, CUBLAS_OP_N, CUBLAS_OP_T, Ny, Nx, Nx, av1, Uold, lda, Dx, ldb, beta, Unew, ldc);
-	/* End convection computation */
+	// First derivarive w/r to y
+	matmulKernel<<<grid_size, block_size>>>(Dy, Uold, d_Uy, Ny, Nx); // Uy
 	
-	cudaDeviceSynchronize();
+	// Second derivative w/r to y
+	matmulKernel<<<grid_size, block_size>>>(Dyy, Uold, d_Uyy, Ny, Nx); // Uyy
 
-	/* Compute Reaction */
-	f_kernel<<<grid_size, block_size>>>(Uold, Bold, F, alpha, epsilon, upc, Nx, Ny);
+	// Transpose x differentiation matrices
+	transposeKernel<<<grid_size, block_size>>>(Dx, d_DxT, Nx, Nx); // DxT
+	transposeKernel<<<grid_size, block_size>>>(Dxx, d_DxxT, Nx, Nx); // DxxT
 
-	cudaDeviceSynchronize();
+	// First derivative w/r to x
+	matmulKernel<<<grid_size, block_size>>>(Uold, d_DxT, d_Ux, Ny, Nx);
 
-	// double *d_tmp;
-	// cudaMalloc(&d_tmp, Ny * Nx * sizeof(double));
-	// cudaMemcpy(d_tmp, Unew, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
-	// fuel<<<grid_size, block_size>>>(F, d_tmp, Unew, dt, Nx, Ny);
-	// cudaFree(d_tmp);
-	//free(h_tmp);
+	// Second derivative w/r to x
+	matmulKernel<<<grid_size, block_size>>>(Uold, d_DxxT, d_Uxx, Ny, Nx);
 
-	//cudaDeviceSynchronize();
+	// Compute F
+	fKernel<<<grid_size, block_size>>>(Uold, Bold, d_F, alpha, epsilon, upc, Nx, Ny);
 
-	cublasDgeam(handle5, CUBLAS_OP_N, CUBLAS_OP_N, Ny, Nx, beta, Unew, ldc, ffdt, F, ldb, Unew, ldc);
-	/* End reaction computation */
+	// Compute G
+	gKernel<<<grid_size, block_size>>>(Uold, Bold, d_G, epsilon, q, upc, Nx, Ny);
 
-	cudaDeviceSynchronize();
-
-	// Destroy the handles
-	cublasDestroy(handle);
-	cublasDestroy(handle2);
-	cublasDestroy(handle3);
-	cublasDestroy(handle4);
-	cublasDestroy(handle5);
+	RHSKernel<<<grid_size, block_size>>>(Uold, Bold, V1, V2, d_Ux, d_Uy, d_Uxx, d_Uyy, d_F, d_G, 
+		Unew, Bnew, kappa, epsilon, upc, q, alpha, dt, Nx, Ny);
 
 	/* Boundary conditions */
-	h1<<<grid_size, block_size>>>(Unew, Nx, Ny);
-	h2<<<grid_size, block_size>>>(Bnew, Nx, Ny);
+	h1<<<grid_size, block_size>>>(Unew, Nx, Ny); // Temperature
+	h2<<<grid_size, block_size>>>(Bnew, Nx, Ny); // Fuel
+
+	/* Free */
+	cudaFree(d_DxT);
+	cudaFree(d_DxxT);
+	cudaFree(d_Ux);
+	cudaFree(d_UxT);
+	cudaFree(d_Uy);
+	cudaFree(d_Uxx);
+	cudaFree(d_UxxT);
+	cudaFree(d_Uyy);
+	cudaFree(d_F);
+	cudaFree(d_G);
+
+	free(DxT);
+	free(DxxT);
+	free(Ux);
+	free(UxT);
+	free(Uy);
+	free(Uxx);
+	free(UxxT);
+	free(Uyy);
+	free(F);
+	free(G);
 }
 
+void eulerMethod(double *d_U, double *d_B, double *d_V1, double *d_V2, 
+	double *d_Dx, double *d_Dy, double *d_Dxx, double *d_Dyy, 
+	double kappa, double epsilon, double upc, double q, double alpha, double dt, int Nx, int Ny, int T) {
+
+	for (int t = 1; t < T; t++) {
+		RHS(&d_U[t * Ny * Nx], &d_U[(t - 1) * Ny * Nx], &d_B[t * Ny * Nx], &d_B[(t - 1) * Ny * Nx],
+			d_V1, d_V2, d_Dx, d_Dy, d_Dxx, d_Dyy, kappa, epsilon, upc, q, alpha, dt, Nx, Ny);
+	}
+}
 
 void solver(double *h_U0, double *h_B0, double *h_V1, double *h_V2, double *h_U, double *h_B, int Nx, int Ny, int T, 
 	double dx, double dy, double dt, double kappa, double epsilon, double upc, double q, double alpha) {
 	
-	double *d_U, *d_B, *d_V1, *d_V2, *d_Dx, *d_Dy, *d_Dxx, *d_Dyy, *d_F;
+	double *d_U, *d_B, *d_V1, *d_V2, *d_Dx, *d_Dy, *d_Dxx, *d_Dyy; //*d_F;
 
 	/* Create differentiation matrices for second derivative */
 	double *h_Dx = (double *)malloc(Nx * Nx * sizeof(double));
 	double *h_Dy = (double *)malloc(Ny * Ny * sizeof(double));
 	double *h_Dxx = (double *)malloc(Nx * Nx * sizeof(double));
 	double *h_Dyy = (double *)malloc(Ny * Ny * sizeof(double));
-	double *h_F = (double *)malloc(Ny * Nx * sizeof(double)); // Temporal matrix for fuel computation
+	//double *h_F = (double *)malloc(Ny * Nx * sizeof(double)); // Temporal matrix for fuel computation
 	FD1(h_Dx, Nx, dx); // Fill differentiation matrix without boundaries
 	FD1(h_Dy, Ny, dy); // Fill differentiation matrix without boundaries
 	FD2(h_Dxx, Nx, dx); // Fill second differentiation matrix without boundaries
@@ -192,7 +240,7 @@ void solver(double *h_U0, double *h_B0, double *h_V1, double *h_V2, double *h_U,
 	cudaMalloc(&d_Dyy, Ny * Ny * sizeof(double));
 	cudaMalloc(&d_V1, Ny * Nx * sizeof(double));
 	cudaMalloc(&d_V2, Ny * Nx * sizeof(double));
-	cudaMalloc(&d_F, Ny * Nx * sizeof(double));
+	//cudaMalloc(&d_F, Ny * Nx * sizeof(double));
 
 	/* Copy to GPU */
 	cudaMemcpy(d_U, h_U, T * Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
@@ -203,16 +251,11 @@ void solver(double *h_U0, double *h_B0, double *h_V1, double *h_V2, double *h_U,
 	cudaMemcpy(d_Dyy, h_Dyy, Ny * Ny * sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_V1, h_V1, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_V2, h_V2, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_F, h_F, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
+	//cudaMemcpy(d_F, h_F, Ny * Nx * sizeof(double), cudaMemcpyHostToDevice);
 
 	/* ODE Solver 	*/
-	for (int t = 1; t < T; t++) {
-		//printf("t: %d", t * Nx * Ny);
-		//printMatrix(&d_U[t * Nx * Ny], Ny, Nx);
-		//RHS(&d_U[t * (Nx-1) * (Ny-1)], &d_U[(t - 1) * (Nx-1) * (Ny-1)], d_V1, d_V2, d_Dxx, d_Dyy, kappa, dt, Nx-2, Ny-2);
-		RHS(&d_U[t * Ny * Nx], &d_U[(t - 1) * Ny * Nx], &d_B[t * Ny * Nx], &d_B[(t - 1) * Ny * Nx],
-			d_V1, d_V2, d_Dx, d_Dy, d_Dxx, d_Dyy, d_F, kappa, epsilon, upc, q, alpha, dt, Nx, Ny);
-	}
+	eulerMethod(d_U, d_B, d_V1, d_V2, d_Dx, d_Dy, d_Dxx, d_Dyy, 
+		kappa, epsilon, upc, q, alpha, dt, Nx, Ny, T);
 	
 	/* Copy from device to host */
 	cudaMemcpy(h_U, d_U, T * Ny * Nx * sizeof(double), cudaMemcpyDeviceToHost); // U
@@ -227,12 +270,12 @@ void solver(double *h_U0, double *h_B0, double *h_V1, double *h_V2, double *h_U,
 	cudaFree(d_Dy);
 	cudaFree(d_Dxx);
 	cudaFree(d_Dyy);
-	cudaFree(d_F);
+	//cudaFree(d_F);
 
 	// Free host memory
 	free(h_Dx);
 	free(h_Dy);
 	free(h_Dxx);
 	free(h_Dyy);
-	free(h_F);
+	//free(h_F);
 }
