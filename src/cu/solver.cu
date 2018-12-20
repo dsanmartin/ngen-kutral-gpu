@@ -175,12 +175,13 @@ void solver(double *h_U0, double *h_B0, double *h_V1, double *h_V2, double *h_U,
 		F = (double *)malloc(Ny * Nx * sizeof(double));
 		G = (double *)malloc(Ny * Nx * sizeof(double));
 
-
+		/*
 		FD1(h_Dx, Nx, dx); // Fill differentiation matrix without boundaries
 		FD1(h_Dy, Ny, dy); // Fill differentiation matrix without boundaries
 		FD2(h_Dxx, Nx, dx); // Fill second differentiation matrix without boundaries
 		FD2(h_Dyy, Ny, dy); // Fill second differentiation matrix without boundaries
-
+		*/
+		
 		/* Copy initial condition to temperatures approximation */
 		memcpy(h_U, h_U0, (Nx * Ny) * sizeof(double));
 

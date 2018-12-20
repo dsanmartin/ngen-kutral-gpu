@@ -37,7 +37,7 @@ NVFLAGS    = -arch=sm_$(NVARCH) -lcublas #-lcurand
 #
 
 MAIN   = main.cu 
-CODC   = files.c
+CODC   = files.c diffmat.c
 CODCPP = #files.cpp
 CODCU  = solver.cu diffmat.cu #linalg.cu
 

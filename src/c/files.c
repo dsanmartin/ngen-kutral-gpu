@@ -18,8 +18,8 @@ void printApproximations(const double *A, int Nx, int Ny, int T) {
 
 // Print matrix A(nr_rows_A, nr_cols_A) storage in column-major format
 void printMatrix(const double *A, int rows, int cols) {
-	for(int i = 0; i < rows; ++i){
-		for(int j = 0; j < cols; ++j){
+	for(int i = 0; i < rows; i++){
+		for(int j = 0; j < cols; j++){
 			printf("%lf ", A[j * rows + i]);	
 		}
 		printf("\n");
