@@ -30,19 +30,16 @@ int main(int argc, char *argv[]) {
 	/* Methods */
 	parameters.spatial = "FD";
 	parameters.time = "RK4";
-	
-	/* Domain differentials */
-	double dx = (parameters.x_max - parameters.x_min) / parameters.N;
-	double dy = (parameters.y_max - parameters.y_min) / parameters.M;
-	double dt = parameters.t_max / parameters.L;
 
 	printf("Kappa: %f\n", parameters.kappa);
 	printf("Spatial: %s\n", parameters.spatial);
 	printf("Time: %s\n", parameters.time);
 
-	// int size = M * N;
-	// int block_size = 256;
-	// int grid_size = (int) ceil((float)size / block_size);
+	int size = M * N;
+	int block_size = 256;
+	int grid_size = (int) ceil((float)size / block_size);
+
+	
 
 	// double *h_M = (double*) malloc((M + 1) * (N + 1) * sizeof(double));
 	// double *h_v = (double*) malloc((N + 1)* sizeof(double));
@@ -66,6 +63,8 @@ int main(int argc, char *argv[]) {
 	// Chebyshev(h_M_CPU, h_v_CPU, N);
 	// printMatrix(h_v_CPU, 1, N + 1);
 	// printMatrix(h_M_CPU, M + 1, N + 1);
+
+
 
 	// /* Memory allocation for matrices in host*/
 	// // Lemperature initial condition
