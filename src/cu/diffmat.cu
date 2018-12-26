@@ -12,9 +12,9 @@ __global__ void FD1Kernel(double *D1N, int M, double h) {
       D1N[j * M + i] = -1 / (2 * h);
 
     if (i == 0)
-      D1N[M * (M - 2)] = -1 / (2 * h);
+      D1N[M * (M - 1)] = -1 / (2 * h);
     if (i == M - 1)
-      D1N[2 * M - 1] = 1 / (2 * h);
+      D1N[M - 1] = 1 / (2 * h);
   }
 }
 
@@ -30,9 +30,9 @@ __global__ void FD2Kernel(double *D2N, int M, double h) {
     }
 
     if (i == 0)
-      D2N[M * (M - 2)] = 1 / (h * h);
+      D2N[M * (M - 1)] = 1 / (h * h);
     if (i == M - 1)
-      D2N[2 * M - 1] = 1 / (h * h);
+      D2N[M - 1] = 1 / (h * h);
   }
 }
 

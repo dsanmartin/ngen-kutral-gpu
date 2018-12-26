@@ -15,8 +15,15 @@ struct _parameters {
   int L;
   int M;
   int N;
-  char *spatial;
-  char *time;
+  const char *spatial;
+  const char *time;
 } typedef Parameters;
+
+struct _diffmats {
+	double *Dx;
+	double *Dy;
+	double *Dxx;
+	double *Dyy;
+} typedef DiffMats;
 
 #endif
