@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
 
 	/* PDE parameters */
 	Parameters parameters;
-	parameters.kappa = 1e-1;//atof(argv[1]);//1e-3;
+	parameters.kappa = 1e-1;
 	parameters.epsilon = 3e-1;
 	parameters.upc = 3.0;
 	parameters.q = 1.0;
@@ -29,7 +29,20 @@ int main(int argc, char *argv[]) {
 	parameters.spatial = "FD";
 	parameters.time = "RK4";	
 
-	solver(parameters);
-	
+	double x_shift[] = {-20, -30, -40};//, -50, -60, -70, -80};
+	double y_shift[] = {-20, -30, -40};//, -50, -60, -70, -80};
+	char char_arr[10];
+
+	for (int i=0; i < sizeof(y_shift) / sizeof(y_shift[0]); i++) {
+		for (int j=0; j < sizeof(x_shift) / sizeof(x_shift[0]); j++) {
+			parameters.x_ign = x_shift[j];
+			parameters.y_ign = y_shift[i];
+			sprintf(char_arr, "%d%d", i, j);
+			const char* p = char_arr;
+			parameters.sim_name = p;
+			solver(parameters);
+		}
+	}
+
 	return 0;
 }

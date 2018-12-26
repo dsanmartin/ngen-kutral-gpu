@@ -2,6 +2,6 @@
 #define UTILS_H
 
 void fillVector(double *v, double h, int N);
-void randomArray(double *a, int size);
+void randomArray(double *a, int rows, int cols);
 
 #endif

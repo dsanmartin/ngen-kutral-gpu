@@ -7,8 +7,13 @@ void fillVector(double *v, double h, int N) {
   }
 }
 
-void randomArray(double *a, int size) {
-  for (int j=0; j < size; j++) {
-    a[j] = (double)rand() / (double)RAND_MAX;
+void randomArray(double *a, int rows, int cols) {
+  for (int k=0; k < rows * cols; k++) {
+    int i = k % rows;
+    int j = k / rows;
+    if (i == 0 || i == rows - 1 || j == 0 || j == cols - 1)
+      a[k] = 0;
+    else
+      a[k] = (double)rand() / (double)RAND_MAX;
   }
 }

@@ -12,11 +12,14 @@ struct _parameters {
 	double y_min;
 	double y_max;
 	double t_max;
+	double x_ign;
+	double y_ign;
   int L;
   int M;
   int N;
   const char *spatial;
   const char *time;
+	const char *sim_name;
 } typedef Parameters;
 
 struct _diffmats {

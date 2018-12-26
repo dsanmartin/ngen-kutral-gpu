@@ -7,4 +7,6 @@
 .vscode/
 obj/
 bin/
+test/
+test_bk/
 *.DS_Store

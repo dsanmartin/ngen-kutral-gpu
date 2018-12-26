@@ -14,15 +14,15 @@ __device__ double u0(double x, double y) {
 }
 
 __device__ double b0(double x, double y) {
-  return 1;//(double) rand() / (double)RAND_MAX ;
+  return 1;
 }
 
 __device__ double v1(double x, double y) {
-  return 0.70710678118;//3.0;
+  return 0.70710678118;
 }
 
 __device__ double v2(double x, double y) {
-  return 0.70710678118;//3.0;
+  return 0.70710678118;
 }
 
 __device__ double s(double u, double upc) {
@@ -37,12 +37,12 @@ __device__ double g(Parameters parameters, double u, double b) {
 	return -s(u, parameters.upc) * (parameters.epsilon / parameters.q) * b * exp(u /(1 + parameters.epsilon * u));
 }
 
-__global__ void U0(double *U, int N, int M) {
+__global__ void U0(Parameters parameters, double *U) {
   int tId = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tId < N * M) {
-    int i = tId % M; // Row index
-    int j = tId / M; // Col index
-    U[j * M + i] = u0(buffer[j] - 20.0, buffer[N + i] - 20.0);
+  if (tId < parameters.N * parameters.M) {
+    int i = tId % parameters.M; // Row index
+    int j = tId / parameters.M; // Col index
+    U[j * parameters.M + i] = u0(buffer[j] + parameters.x_ign, buffer[parameters.N + i] + parameters.y_ign);
   }
 }
 
@@ -55,90 +55,7 @@ __global__ void B0(double *B, int N, int M) {
   }
 }
 
-__global__ void RHS(Parameters parameters, DiffMats DM, double *vector) {
-  int tId = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tId < parameters.M * parameters.N) {
-    int i = tId % parameters.M; // Row index
-    int j = tId / parameters.M; // Col index
-    double u_new = 0; // Boundary conditions
-		double b_new = 0; // Boundary conditions
-
-		/* Get actual value of approximations */
-		double u = vector[j * parameters.N + i];
-		double b = vector[j * parameters.N + i + parameters.M * parameters.N];
-
-		/* PDE */
-    if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			
-			/* Evaluate vector field */
-      double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-			double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-			
-			/* Compute derivatives */
-      double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
-      int m = parameters.M;
-      //int n = parameters.N;
-      for (int k = 0; k < parameters.N; k++) {
-        ux += vector[k * m + i] * DM.Dx[k * m + j];
-        uy += DM.Dy[k * m + i] * vector[j * m + k];
-        uxx += vector[k * m + i] * DM.Dxx[k * m + j];
-        uyy += DM.Dyy[k * m + i] * vector[j * m + k];
-      }
-
-      // double dx = (parameters.x_max - parameters.x_min) / (parameters.N-1);
-	    // double dy = (parameters.y_max - parameters.y_min) / (parameters.M-1);
-      // double ux = (vector[(j+1) * m + i] - vector[(j-1) * m + i]) / (2*dx);
-      // double uxx = (vector[(j+1) * m + i] - 2 * vector[j * m + i] + vector[(j-1) * m + i]) / (dx * dx);
-      // double uy = (vector[j * m + i + 1] - vector[j * m + i - 1]) / (2*dy);
-      // double uyy = (vector[j * m + i + 1] - 2 * vector[j * m + i] + vector[j * m + i - 1]) / (dy * dy);
-			/* Compute PDE */
-      double diffusion = parameters.kappa * (uxx + uyy);
-      double convection = v_v1 * ux + v_v2 * uy;
-      double reaction = f(parameters, u, b);
-      double fuel = g(parameters, u, b);
-      u_new = diffusion - convection + reaction;
-      b_new = fuel;
-		}
-		/* Update values */
-    vector[tId] = u_new;
-		vector[tId + parameters.M * parameters.N] = b_new;
-		// old_vector[tId] = u;
-		// old_vector[tId + parameters.M * parameters.N] = b;
-  }
-}
-
-__global__ void EulerKernel(double *y, double *y_old, double dt, int size) {
-  int tId = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tId < size) {
-    double u_old = y_old[tId];
-    double b_old = y_old[size + tId];
-    double u_new = y[tId];    
-    double b_new = y[size + tId];
-    y[tId] = u_old + dt * u_new;
-    y[tId + size] = b_old + dt * b_new;
-  }
-}
-
-__global__ void RK4Kernel(double *y, double *y_old, double dt, int size) {
-  int tId = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tId < size) {
-    double u_old = y_old[tId];
-    double b_old = y_old[size + tId];
-    double u_k1 = y[tId];    
-    double u_k2 = u_old + 0.5 * dt * u_k1;
-    double u_k3 = u_old + 0.5 * dt * u_k2;
-    double u_k4 = u_old + dt * u_k3;
-    double b_k1 = y[size + tId];
-    double b_k2 = b_old + 0.5 * dt * b_k1;
-    double b_k3 = b_old + 0.5 * dt * b_k2;
-    double b_k4 = b_old + dt * b_k3;
-    // y[tId] = y_tmp + (1.0/6.0) * dt * (k1 + 2 * k2 + 2 * k3 + k4);
-    y[tId] = u_old + (1.0/6.0) * dt * (u_k1 + 2 * u_k2 + 2 * u_k3 + u_k4);
-    y[tId + size] = b_old + (1.0/6.0) * dt * (b_k1 + 2 * b_k2 + 2 * b_k3 + b_k4);
-  }
-}
-
-__global__ void RHS2(Parameters parameters, DiffMats DM, double *vector, double dt) {
+__global__ void RHSEuler(Parameters parameters, DiffMats DM, double *vector, double dt) {
   int tId = threadIdx.x + blockIdx.x * blockDim.x;
   if (tId < parameters.M * parameters.N) {
     int i = tId % parameters.M; // Row index
@@ -176,86 +93,9 @@ __global__ void RHS2(Parameters parameters, DiffMats DM, double *vector, double 
       u_new = diffusion - convection + reaction;
       b_new = fuel;
 		}
-		/* Update values */
+		/* Update values using Euler method */
     vector[tId] = u + dt * u_new;
     vector[tId + parameters.M * parameters.N] = b + dt * b_new;
-  }
-}
-
-// __global__ void RHS3(Parameters parameters, DiffMats DM, double *vector, double dt) {
-//   int tId = threadIdx.x + blockIdx.x * blockDim.x;
-//   if (tId < parameters.M * parameters.N) {
-//     int i = tId % parameters.M; // Row index
-//     int j = tId / parameters.M; // Col index
-//     double u_new = 0; // Boundary conditions
-// 		double b_new = 0; // Boundary conditions
-
-// 		/* Get actual value of approximations */
-// 		double u = vector[j * parameters.N + i];
-// 		double b = vector[j * parameters.N + i + parameters.M * parameters.N];
-// 		double u1 = vector[j * parameters.N + i];
-// 		double b1 = vector[j * parameters.N + i + parameters.M * parameters.N];
-// 		double u2 = vector[j * parameters.N + i];
-// 		double b2 = vector[j * parameters.N + i + parameters.M * parameters.N];
-// 		double u3 = vector[j * parameters.N + i];
-// 		double b3 = vector[j * parameters.N + i + parameters.M * parameters.N];
-// 		double u4 = vector[j * parameters.N + i];
-// 		double b4 = vector[j * parameters.N + i + parameters.M * parameters.N];
-
-// 		/* PDE */
-//     if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			
-// 			/* Evaluate vector field */
-//       double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-// 			double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-			
-// 			/* Compute derivatives */
-// 			double ux1 = 0.0, uy1 = 0.0, uxx1 = 0.0, uyy1 = 0.0;
-// 			double ux2 = 0.0, uy2 = 0.0, uxx2 = 0.0, uyy2 = 0.0;
-// 			double ux3 = 0.0, uy3 = 0.0, uxx3 = 0.0, uyy3 = 0.0;
-// 			double ux4 = 0.0, uy4 = 0.0, uxx4 = 0.0, uyy4 = 0.0;
-//       int m = parameters.M;
-//       for (int k = 0; k < parameters.N; k++) {
-// 				// k1
-//         ux1 += vector[k * m + i] * DM.Dx[k * m + j];
-//         uy1 += DM.Dy[k * m + i] * vector[j * m + k];
-//         uxx1 += vector[k * m + i] * DM.Dxx[k * m + j];
-// 				uyy1 += DM.Dyy[k * m + i] * vector[j * m + k];
-// 				// k2
-// 				ux2 += (vector[k * m + i] + dt * DM.Dx[k * m + j];
-//         uy2 += DM.Dy[k * m + i] * vector[j * m + k];
-//         uxx2 += vector[k * m + i] * DM.Dxx[k * m + j];
-// 				uyy2 += DM.Dyy[k * m + i] * vector[j * m + k];
-// 				// k3
-// 				ux3 += vector[k * m + i] * DM.Dx[k * m + j];
-//         uy3 += DM.Dy[k * m + i] * vector[j * m + k];
-//         uxx3 += vector[k * m + i] * DM.Dxx[k * m + j];
-// 				uyy3 += DM.Dyy[k * m + i] * vector[j * m + k];
-// 				// k4
-// 				ux4 += vector[k * m + i] * DM.Dx[k * m + j];
-//         uy4 += DM.Dy[k * m + i] * vector[j * m + k];
-//         uxx4 += vector[k * m + i] * DM.Dxx[k * m + j];
-//         uyy4 += DM.Dyy[k * m + i] * vector[j * m + k];
-//       }
-
-// 			/* Compute PDE */
-//       double diffusion = parameters.kappa * (uxx + uyy);
-//       double convection = v_v1 * ux + v_v2 * uy;
-//       double reaction = f(parameters, u, b);
-//       double fuel = g(parameters, u, b);
-//       u_new = diffusion - convection + reaction;
-//       b_new = fuel;
-// 		}
-// 		/* Update values */
-//     vector[tId] = u + dt * u_new;
-//     vector[tId + parameters.M * parameters.N] = b + dt * b_new;
-//   }
-// }
-
-__global__ void pibarrathebest(double *challa, int M, int N) {
-  int tId = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tId < M + N) {
-    challa[tId] = buffer[tId];
   }
 }
 
@@ -266,103 +106,44 @@ void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double 
 
   /* Host vector */
 	double *h_y = (double *) malloc(2 * size * sizeof(double));
-	double *h_U = (double *) malloc(size * sizeof(double));
-	double *h_B = (double *) malloc(size * sizeof(double));
 
   /* Device vectors */
-  double *d_y, *d_y_tmp;
+  double *d_y;
 
   /* Device memory allocation */
   cudaMalloc(&d_y, 2 * size * sizeof(double));
-  cudaMalloc(&d_y_tmp, 2 * size * sizeof(double));
-
-  /* Copy initial conditions to vector */
-  cudaMemcpy(d_y, U, size * sizeof(double), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_y + size, B, size * sizeof(double), cudaMemcpyHostToDevice);
-  //cudaMemcpy(d_y_tmp, U, size * sizeof(double), cudaMemcpyHostToDevice);
-	//cudaMemcpy(d_y_tmp + size, B, size * sizeof(double), cudaMemcpyHostToDevice);
-	
-	// cudaMemcpy(h_U, d_y, size * sizeof(double), cudaMemcpyDeviceToHost);
-	// cudaMemcpy(h_B, d_y + size, size * sizeof(double), cudaMemcpyDeviceToHost);
-	
-	// saveApproximation("test/output/Utest.txt", h_U, parameters.N, parameters.M, 1);
-	// saveApproximation("test/output/Btest.txt", h_B, parameters.N, parameters.M, 1);
-  
-  for (int k = 1; k <= parameters.L; k++) { 
-    RHS2<<<grid_size, block_size>>>(parameters, DM, d_y, dt);   
-		//cudaMemcpy(d_y_tmp, d_y, 2 * size * sizeof(double), cudaMemcpyDeviceToDevice);
-		//cudaDeviceSynchronize();
-		//RHS<<<grid_size, block_size>>>(parameters, DM, d_y, d_y_tmp);
-    //cudaDeviceSynchronize();
-    //RK4Kernel<<<grid_size, block_size>>>(d_y, d_y_tmp, dt, size);
-    //EulerKernel<<<grid_size, block_size>>>(d_y, d_y_tmp, dt, size);
-    //cudaMemcpy(d_y_tmp, d_y, 2 * size * sizeof(double), cudaMemcpyDeviceToDevice);
-  }
-
-  //cudaMemcpy(h_y, d_y, 2 * size * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpy(U, d_y, size * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaMemcpy(B, d_y + size, size * sizeof(double), cudaMemcpyDeviceToHost);
-
-  cudaFree(d_y);
-  cudaFree(d_y_tmp);
-  free(h_y);
-}
-
-void ODESolver2(double *U, double *B, DiffMats DM, Parameters parameters, double dt) {
-  int size = parameters.M * parameters.N;
-  int block_size = 256;
-  int grid_size = (int) ceil((float)size / block_size);
-
-  /* Host vector */
-	double *h_y = (double *) malloc(2 * size * sizeof(double));
-	double *h_k1 = (double *) malloc(2 * size * sizeof(double));
-	double *h_k2 = (double *) malloc(2 * size * sizeof(double));
-	double *h_k3 = (double *) malloc(2 * size * sizeof(double));
-	double *h_k4 = (double *) malloc(2 * size * sizeof(double));
-
-  /* Device vectors */
-  double *d_y, *d_k1, *d_k2, *d_k3, *d_k4;
-
-  /* Device memory allocation */
-  cudaMalloc(&d_y, 2 * size * sizeof(double));
-	cudaMalloc(&d_k1, 2 * size * sizeof(double));
-	cudaMalloc(&d_k2, 2 * size * sizeof(double));
-	cudaMalloc(&d_k3, 2 * size * sizeof(double));
-	cudaMalloc(&d_k4, 2 * size * sizeof(double));
 
   /* Copy initial conditions to vector */
   cudaMemcpy(d_y, U, size * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_y + size, B, size * sizeof(double), cudaMemcpyHostToDevice);
   
   for (int k = 1; k <= parameters.L; k++) { 
-    RHS<<<grid_size, block_size>>>(parameters, DM, d_y, dt);   
-		//cudaMemcpy(d_y_tmp, d_y, 2 * size * sizeof(double), cudaMemcpyDeviceToDevice);
-		//cudaDeviceSynchronize();
-		//RHS<<<grid_size, block_size>>>(parameters, DM, d_y, d_y_tmp);
-    //cudaDeviceSynchronize();
-    //RK4Kernel<<<grid_size, block_size>>>(d_y, d_y_tmp, dt, size);
-    //EulerKernel<<<grid_size, block_size>>>(d_y, d_y_tmp, dt, size);
-    //cudaMemcpy(d_y_tmp, d_y, 2 * size * sizeof(double), cudaMemcpyDeviceToDevice);
+    RHSEuler<<<grid_size, block_size>>>(parameters, DM, d_y, dt);   
   }
 
-  //cudaMemcpy(h_y, d_y, 2 * size * sizeof(double), cudaMemcpyDeviceToHost);
+  /* Save last approximation value */
   cudaMemcpy(U, d_y, size * sizeof(double), cudaMemcpyDeviceToHost);
   cudaMemcpy(B, d_y + size, size * sizeof(double), cudaMemcpyDeviceToHost);
 
+  /* Memory free */
   cudaFree(d_y);
-	cudaFree(d_k1);
-	cudaFree(d_k2);
-	cudaFree(d_k3);
-	cudaFree(d_k4);
   free(h_y);
 }
+
 
 void solver(Parameters parameters) {
   /* Kernel parameters */
 	int size = parameters.M * parameters.N;
 	int block_size = 256;
   int grid_size = (int) ceil((float)size / block_size);
+
+  /* Simulation name */
+  char U0_save[20] = "test/output/U0_";
+  char B0_save[20] = "test/output/B0_";
+  char U_save[20] = "test/output/U_";
+  char B_save[20] = "test/output/B_";
   
+
   /* Domain differentials */
 	double dx = (parameters.x_max - parameters.x_min) / (parameters.N-1);
 	double dy = (parameters.y_max - parameters.y_min) / (parameters.M-1);
@@ -391,7 +172,8 @@ void solver(Parameters parameters) {
   fillVector(x, dx, parameters.N);
   fillVector(y, dy, parameters.M);
 
-	randomArray(h_B, parameters.M * parameters.N);
+  /* Random fuel */
+	randomArray(h_B, parameters.M,  parameters.N);
 
   /* Device memory allocation */
   cudaMalloc(&d_U, size * sizeof(double));
@@ -422,18 +204,9 @@ void solver(Parameters parameters) {
   DM.Dy = d_Dy;
   DM.Dxx = d_Dxx;
 	DM.Dyy = d_Dyy;
-	
-	// cudaMemcpy(h_Dx, d_Dx, size * sizeof(double), cudaMemcpyDeviceToHost);
-	// cudaMemcpy(h_Dxx, d_Dxx, size * sizeof(double), cudaMemcpyDeviceToHost);
-	// cudaMemcpy(h_Dy, d_Dy, size * sizeof(double), cudaMemcpyDeviceToHost);
-	// cudaMemcpy(h_Dyy, d_Dyy, size * sizeof(double), cudaMemcpyDeviceToHost);
-	// printMatrix(h_Dy, parameters.M, parameters.N);
-	// printMatrix(h_Dyy, parameters.M, parameters.N);
-	// printMatrix(h_Dx, parameters.M, parameters.N);
-	// printMatrix(h_Dxx, parameters.M, parameters.N);
 
   /* Compute initial contitions */
-  U0<<<grid_size, block_size>>>(d_U, parameters.N, parameters.M); // Temperature
+  U0<<<grid_size, block_size>>>(parameters, d_U); // Temperature
   //B0<<<grid_size, block_size>>>(d_B, parameters.N, parameters.M); // Fuel
 
   cudaDeviceSynchronize();
@@ -441,8 +214,8 @@ void solver(Parameters parameters) {
   /* Save initial conditions */
   cudaMemcpy(h_U, d_U, size * sizeof(double), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_B, d_B, size * sizeof(double), cudaMemcpyDeviceToHost);
-  saveApproximation("test/output/U0.txt", h_U, parameters.N, parameters.M, 1);
-  saveApproximation("test/output/B0.txt", h_B, parameters.N, parameters.M, 1);
+  saveApproximation(strcat(strcat(U0_save, parameters.sim_name), ".txt"), h_U, parameters.N, parameters.M, 1);
+  saveApproximation(strcat(strcat(B0_save, parameters.sim_name), ".txt"), h_B, parameters.N, parameters.M, 1);
   
   /* ODE Integration */
   ODESolver(d_U, d_B, DM, parameters, dt);
@@ -452,8 +225,8 @@ void solver(Parameters parameters) {
   cudaMemcpy(h_B, d_B, size * sizeof(double), cudaMemcpyDeviceToHost);
 
   /* Save  */
-  saveApproximation("test/output/Uaa.txt", h_U, parameters.N, parameters.M, 1);
-  saveApproximation("test/output/Baa.txt", h_B, parameters.N, parameters.M, 1);
+  saveApproximation(strcat(strcat(U_save, parameters.sim_name), ".txt"), h_U, parameters.N, parameters.M, 1);
+  saveApproximation(strcat(strcat(B_save, parameters.sim_name), ".txt"), h_B, parameters.N, parameters.M, 1);
 
   /* Memory free */
   cudaFree(d_U);
