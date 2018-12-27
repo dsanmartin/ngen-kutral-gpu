@@ -30,7 +30,7 @@ CPPFLAGS  = -Wall
 #
 
 NVARCH	   = 35
-NVFLAGS    = -arch=sm_$(NVARCH) -lcurand #-lcublas #
+NVFLAGS    = -arch=sm_$(NVARCH) -lcurand #-lcublas 
 
 #
 # Files to compile: 
@@ -39,7 +39,7 @@ NVFLAGS    = -arch=sm_$(NVARCH) -lcurand #-lcublas #
 MAIN   = main.cu 
 CODC   = files.c diffmat.c utils.c
 CODCPP = #files.cpp
-CODCU  = diffmat.cu solver.cu #linalg.cu
+CODCU  = diffmat.cu wildfire.cu #linalg.cu
 
 #
 # Formating the folder structure for compiling/linking/cleaning.

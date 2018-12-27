@@ -3,7 +3,7 @@
 #include <time.h>
 #include "c/include/files.h"
 #include "c/include/structures.h"
-#include "cu/include/solver.cuh"
+#include "cu/include/wildfire.cuh"
 
 int main(int argc, char *argv[]) {
 
@@ -29,8 +29,8 @@ int main(int argc, char *argv[]) {
 	parameters.spatial = "FD";
 	parameters.time = "RK4";	
 
-	double x_shift[] = {-20, -30, -40, -50, -60, -70, -80};
-	double y_shift[] = {-20, -30, -40, -50, -60, -70, -80};
+	double x_shift[] = {-20, -30};//, -40, -50, -60, -70, -80};
+	double y_shift[] = {-20, -20};//, -40, -50, -60, -70, -80};
 	char char_arr[10];
 
 	for (int i=0; i < sizeof(y_shift) / sizeof(y_shift[0]); i++) {
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 			sprintf(char_arr, "%d%d", i, j);
 			const char* p = char_arr;
 			parameters.sim_name = p;
-			solver(parameters);
+			wildfire(parameters);
 		}
 	}
 

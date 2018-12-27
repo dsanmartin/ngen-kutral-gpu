@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "include/solver.cuh"
+#include "include/wildfire.cuh"
 #include "include/diffmat.cuh"
 #include "../c/include/files.h"
 #include "../c/include/utils.h"
@@ -97,6 +97,7 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *vector, dou
     vector[tId] = u + dt * u_new;
     vector[tId + parameters.M * parameters.N] = b + dt * b_new;
   }
+
 }
 
 void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double dt) {
@@ -131,7 +132,7 @@ void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double 
 }
 
 
-void solver(Parameters parameters) {
+void wildfire(Parameters parameters) {
   /* Kernel parameters */
 	int size = parameters.M * parameters.N;
 	int block_size = 256;

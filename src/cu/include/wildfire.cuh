@@ -2,7 +2,7 @@
 #define SOLVER_CUH
 #include "../../c/include/structures.h"
 
-void solver(Parameters parameters);
+void wildfire(Parameters parameters);
 void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double dt);
 
 #endif
