@@ -29,8 +29,8 @@ int main(int argc, char *argv[]) {
 	parameters.spatial = "FD";
 	parameters.time = "RK4";	
 
-	double x_shift[] = {-20, -30, -40};//, -50, -60, -70, -80};
-	double y_shift[] = {-20, -30, -40};//, -50, -60, -70, -80};
+	double x_shift[] = {-20, -30, -40, -50, -60, -70, -80};
+	double y_shift[] = {-20, -30, -40, -50, -60, -70, -80};
 	char char_arr[10];
 
 	for (int i=0; i < sizeof(y_shift) / sizeof(y_shift[0]); i++) {

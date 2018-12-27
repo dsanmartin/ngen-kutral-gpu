@@ -220,6 +220,8 @@ void solver(Parameters parameters) {
   /* ODE Integration */
   ODESolver(d_U, d_B, DM, parameters, dt);
 
+  cudaDeviceSynchronize();
+
   /* Copy approximations to host */
   cudaMemcpy(h_U, d_U, size * sizeof(double), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_B, d_B, size * sizeof(double), cudaMemcpyDeviceToHost);
