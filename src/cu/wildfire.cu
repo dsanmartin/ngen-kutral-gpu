@@ -55,6 +55,34 @@ __global__ void B0(double *B, int N, int M) {
   }
 }
 
+__device__ float kU(Parameters parameters, DiffMats DM, double *vector, double a, double c, int i, int j) {
+  /* Actual u and b */
+  double u = vector[j * parameters.N + i] + a;
+  double b = vector[j * parameters.N + i + parameters.M * parameters.N] + c;
+    
+  /* Evaluate vector field */
+  double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
+  double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
+  
+  /* Compute derivatives */
+  double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
+  int m = parameters.M;
+  //int n = parameters.N;
+  for (int k = 0; k < parameters.N; k++) {
+    ux += (vector[k * m + i] + a) * DM.Dx[k * m + j];
+    uy += DM.Dy[k * m + i] * (vector[j * m + k] + a);
+    uxx += (vector[k * m + i] + a) * DM.Dxx[k * m + j];
+    uyy += DM.Dyy[k * m + i] * (vector[j * m + k] + a);
+  }
+
+  /* Compute RHS PDE */
+  double diffusion = parameters.kappa * (uxx + uyy);
+  double convection = v_v1 * ux + v_v2 * uy;
+  double reaction = f(parameters, u, b);
+
+  return diffusion - convection + reaction;
+}
+
 __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *vector, double dt) {
   int tId = threadIdx.x + blockIdx.x * blockDim.x;
   if (tId < parameters.M * parameters.N) {
@@ -97,16 +125,45 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *vector, dou
     vector[tId] = u + dt * u_new;
     vector[tId + parameters.M * parameters.N] = b + dt * b_new;
   }
+}
 
+__global__ void RHSRK4(Parameters parameters, DiffMats DM, double *vector, double dt) {
+  int tId = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tId < parameters.M * parameters.N) {
+    int i = tId % parameters.M; // Row index
+    int j = tId / parameters.M; // Col index
+    double u_new = 0; // Boundary conditions
+		double b_new = 0; // Boundary conditions
+
+		/* Get actual value of approximations */
+		double u = vector[j * parameters.N + i];
+		double b = vector[j * parameters.N + i + parameters.M * parameters.N];
+
+		/* PDE */
+    if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
+
+      double u_k1 = kU(parameters, DM, vector, 0.0, 0.0, i, j);
+      double b_k1 = g(parameters, u, b);
+      double u_k2 = kU(parameters, DM, vector, 0.5 * dt * u_k1, 0.5 * dt * b_k1, i, j);
+      double b_k2 = g(parameters, u + 0.5 * dt * u_k1, b + 0.5 * dt * b_k1);
+      double u_k3 = kU(parameters, DM, vector, 0.5 * dt * u_k2, 0.5 * dt * b_k2, i, j);
+      double b_k3 = g(parameters, u + 0.5 * dt * u_k2, b + 0.5 * dt * b_k2);
+      double u_k4 = kU(parameters, DM, vector, dt * u_k3, dt * b_k3, i, j);
+      double b_k4 = g(parameters, u + dt * u_k3, b + dt * b_k3);
+
+      u_new = (1.0/6.0) * dt * (u_k1 + 2 * u_k2 + 2 * u_k3 + u_k4);
+      b_new = (1.0/6.0) * dt * (b_k1 + 2 * b_k2 + 2 * b_k3 + b_k4);
+		}
+		/* Update values using Euler method */
+    vector[tId] = u + u_new;
+    vector[tId + parameters.M * parameters.N] = b + b_new;
+  }
 }
 
 void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double dt) {
   int size = parameters.M * parameters.N;
   int block_size = 256;
   int grid_size = (int) ceil((float)size / block_size);
-
-  /* Host vector */
-	double *h_y = (double *) malloc(2 * size * sizeof(double));
 
   /* Device vectors */
   double *d_y;
@@ -117,9 +174,17 @@ void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double 
   /* Copy initial conditions to vector */
   cudaMemcpy(d_y, U, size * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_y + size, B, size * sizeof(double), cudaMemcpyHostToDevice);
-  
-  for (int k = 1; k <= parameters.L; k++) { 
-    RHSEuler<<<grid_size, block_size>>>(parameters, DM, d_y, dt);   
+
+  if (strcmp(parameters.time, "Euler") == 0) {
+    printf("Euler method in time\n");
+    for (int k = 1; k <= parameters.L; k++) { 
+      RHSEuler<<<grid_size, block_size>>>(parameters, DM, d_y, dt);
+    }
+  } else if (strcmp(parameters.time, "RK4") == 0) {
+    printf("RK4 method in time \n");
+    for (int k = 1; k <= parameters.L; k++) { 
+      RHSRK4<<<grid_size, block_size>>>(parameters, DM, d_y, dt);   
+    }
   }
 
   /* Save last approximation value */
@@ -128,7 +193,6 @@ void ODESolver(double *U, double *B, DiffMats DM, Parameters parameters, double 
 
   /* Memory free */
   cudaFree(d_y);
-  free(h_y);
 }
 
 
@@ -144,7 +208,6 @@ void wildfire(Parameters parameters) {
   char U_save[20] = "test/output/U_";
   char B_save[20] = "test/output/B_";
   
-
   /* Domain differentials */
 	double dx = (parameters.x_max - parameters.x_min) / (parameters.N-1);
 	double dy = (parameters.y_max - parameters.y_min) / (parameters.M-1);

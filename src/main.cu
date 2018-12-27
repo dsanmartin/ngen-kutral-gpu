@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 	parameters.t_max = 50;
 
 	/* Domain definition */
-	parameters.L = 3000; // Time resolution
+	parameters.L = 1000; // Time resolution
 	parameters.M = 128; // Spatial resolution (y-axis - matrix rows)
 	parameters.N = 128; // Spatial resolution (x-axis - matrix columns)
 
@@ -29,8 +29,10 @@ int main(int argc, char *argv[]) {
 	parameters.spatial = "FD";
 	parameters.time = "RK4";	
 
-	double x_shift[] = {-20, -30, -40, -50, -60, -70, -80};
-	double y_shift[] = {-20, -30, -40, -50, -60, -70, -80};
+	// double x_shift[] = {-20, -30, -40, -50, -60, -70, -80};
+	// double y_shift[] = {-20, -30, -40, -50, -60, -70, -80};
+	double x_shift[] = {-20};
+	double y_shift[] = {-20};
 	char char_arr[10];
 
 	for (int i=0; i < sizeof(y_shift) / sizeof(y_shift[0]); i++) {
