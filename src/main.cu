@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 
 	/* Methods */
 	parameters.spatial = "FD";
-	parameters.time = "RK4";	
+	parameters.time = "Euler";	
 
 	// double x_shift[] = {-20, -30, -40, -50, -60, -70, -80};
 	// double y_shift[] = {-20, -30, -40, -50, -60, -70, -80};

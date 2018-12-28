@@ -30,7 +30,7 @@ CPPFLAGS  = -Wall
 #
 
 NVARCH	   = 35
-NVFLAGS    = -arch=sm_$(NVARCH) -lcurand #-lcublas 
+NVFLAGS    = -G -g -arch=sm_$(NVARCH) -lcurand #-lcublas 
 
 #
 # Files to compile: 
