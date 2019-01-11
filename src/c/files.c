@@ -63,14 +63,13 @@ void readConf(const char *filename) {
 	fclose(file);
 }
 */
-// Read file to array
+
+/* Read file to array */
 void readInput(const char *filename, double *A, int rows, int cols) {
-  //int i, j;
   FILE *file;
   file = fopen(filename, "r");
   for(int i = 0; i < rows; i++) {
     for(int j = 0; j < cols; j++) {
-      //Use lf format specifier, %c is for character
       if (!fscanf(file, "%lf", &A[j * rows + i])) 
         break;
     }
@@ -78,20 +77,13 @@ void readInput(const char *filename, double *A, int rows, int cols) {
   fclose(file);
 }
 
-/* Print approximations matrices */
-void saveApproximation(const char *filename, const double *A, int Nx, int Ny, int T) {
-	//printf("save approx");
+/* Save approximations matrices */
+void saveApproximation(const char *filename, const double *A, int rows, int cols) {
 	FILE *f = fopen(filename, "w");
-	for (int k = 0; k < T; k++) {
-		if (k % 500 == 0) {
-			for (int i = 0; i < Ny; i++) {
-				for (int j = 0; j < Nx; j++) {
-					fprintf(f, "%lf ", A[k * Nx * Ny + j * Nx + i]);	
-				}
-				fprintf(f, "\n");
-			}
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j++) {
+			fprintf(f, "%f ", A[j * rows + i]);	
 		}
-		//fprintf(f, "\n");
+		fprintf(f, "\n");
 	}
-	//fprintf(f, "\n");
 }

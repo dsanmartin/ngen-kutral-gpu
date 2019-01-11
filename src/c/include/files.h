@@ -9,6 +9,6 @@ void printApproximations(const double *A, int Nx, int Ny, int T);
 //   double *upc, double *q, double *alpha);
 void readConf(const char *filename);
 void readInput(const char *filename, double *A, int rows, int cols);
-void saveApproximation(const char *filename, const double *A, int Nx, int Ny, int T);
+void saveApproximation(const char *filename, const double *A, int rows, int cols);
 
 #endif

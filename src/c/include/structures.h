@@ -12,11 +12,15 @@ struct _parameters {
 	double y_min;
 	double y_max;
 	double t_max;
-	double x_ign;
-	double y_ign;
+	double x_ign_min;
+	double x_ign_max;
+	double y_ign_min;
+	double y_ign_max;
   int L;
   int M;
   int N;
+	int x_ign_n;
+	int y_ign_n;
   const char *spatial;
   const char *time;
 	const char *sim_name;

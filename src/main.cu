@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 	parameters.t_max = 50;
 
 	/* Domain definition */
-	parameters.L = 1000; // Time resolution
+	parameters.L = 500; // Time resolution
 	parameters.M = 128; // Spatial resolution (y-axis - matrix rows)
 	parameters.N = 128; // Spatial resolution (x-axis - matrix columns)
 
@@ -29,22 +29,23 @@ int main(int argc, char *argv[]) {
 	parameters.spatial = "FD";
 	parameters.time = "Euler";	
 
-	// double x_shift[] = {-20, -30, -40, -50, -60, -70, -80};
-	// double y_shift[] = {-20, -30, -40, -50, -60, -70, -80};
-	double x_shift[] = {-20};
-	double y_shift[] = {-20};
-	char char_arr[10];
+	/* Ignition points */
+	parameters.x_ign_min = -60;
+	parameters.x_ign_max = -20;
+	parameters.y_ign_min = -60;
+	parameters.y_ign_max = -20;
+	parameters.x_ign_n = atoi(argv[1]);//5;
+	parameters.y_ign_n = atoi(argv[2]);//5;
+	// parameters.x_ign_min = -20;
+	// parameters.x_ign_max = -20;
+	// parameters.y_ign_min = -20;
+	// parameters.y_ign_max = -20;
+	// parameters.x_ign_n = 1;
+	// parameters.y_ign_n = 1;
+	
 
-	for (int i=0; i < sizeof(y_shift) / sizeof(y_shift[0]); i++) {
-		for (int j=0; j < sizeof(x_shift) / sizeof(x_shift[0]); j++) {
-			parameters.x_ign = x_shift[j];
-			parameters.y_ign = y_shift[i];
-			sprintf(char_arr, "%d%d", i, j);
-			const char* p = char_arr;
-			parameters.sim_name = p;
-			wildfire(parameters);
-		}
-	}
+	/* Simulations */
+	wildfire(parameters);
 
 	return 0;
 }
