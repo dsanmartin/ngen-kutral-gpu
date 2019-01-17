@@ -1,4 +1,6 @@
+#include <stdio.h>
 #include <stdlib.h>
+#include<time.h>
 #include "include/utils.h"
 
 void fillVector(double *v, double h, int N) {

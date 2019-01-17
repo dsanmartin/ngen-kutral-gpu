@@ -23,7 +23,8 @@ struct _parameters {
 	int y_ign_n;
   const char *spatial;
   const char *time;
-	const char *sim_name;
+	const char *approach;
+	const char *sim_id;
 } typedef Parameters;
 
 struct _diffmats {

@@ -1,11 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "c/include/utils.h"
 #include "c/include/files.h"
 #include "c/include/structures.h"
 #include "cu/include/wildfire.cuh"
 
 int main(int argc, char *argv[]) {
+	
+	// /* Info for directory simulation */
+	// char buff[15];
+	// char directory[40];
+	// time_t now = time (0);
+	// struct stat st = {0};
 
 	/* PDE parameters */
 	Parameters parameters;
@@ -27,22 +36,32 @@ int main(int argc, char *argv[]) {
 
 	/* Methods */
 	parameters.spatial = "FD";
-	parameters.time = "Euler";	
+	parameters.time = argv[1];//"Euler";
+	parameters.approach = argv[4];	
 
 	/* Ignition points */
-	parameters.x_ign_min = -60;
+	parameters.x_ign_min = -20;
 	parameters.x_ign_max = -20;
-	parameters.y_ign_min = -60;
+	parameters.y_ign_min = -20;
 	parameters.y_ign_max = -20;
-	parameters.x_ign_n = atoi(argv[1]);//5;
-	parameters.y_ign_n = atoi(argv[2]);//5;
+	parameters.x_ign_n = atoi(argv[2]);//5;
+	parameters.y_ign_n = atoi(argv[3]);//5;
 	// parameters.x_ign_min = -20;
 	// parameters.x_ign_max = -20;
 	// parameters.y_ign_min = -20;
 	// parameters.y_ign_max = -20;
 	// parameters.x_ign_n = 1;
 	// parameters.y_ign_n = 1;
-	
+
+	// /* Simulation ID */
+  // strftime (buff, 15, "%Y%m%d%H%M%S", localtime (&now));
+	// parameters.sim_id = (const char*) buff;	
+
+	// /* Create simulation directory */
+	// sprintf(directory, "test/output/%s/", parameters.sim_id);
+	// if (stat(directory, &st) == -1) {
+	// 		mkdir(directory, 0700);
+	// }
 
 	/* Simulations */
 	wildfire(parameters);

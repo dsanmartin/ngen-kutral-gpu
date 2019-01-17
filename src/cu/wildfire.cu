@@ -96,201 +96,45 @@ __device__ double RHSU(Parameters parameters, DiffMats DM, double *Y, int i, int
 	return diffusion - convection + reaction;
 }
 
-__device__ double RHSU2(Parameters parameters, DiffMats DM, double *Y, double u, double b, int i, int j, int id) {
-	/* Get actual value of approximations */
-	int offset = (id < parameters.N) ? 0 : parameters.N;
-	// double u = Y[j * parameters.M + i];
-	// double b = Y[j * parameters.M + i + parameters.M * parameters.N];
-
-	/* Evaluate vector field */
-	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-	
-	/* Compute derivatives */
-	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
-	int m = parameters.M;
-	int n = parameters.N;
-	
-	for (int k = 0; k < parameters.N; k++) {
-		ux += Y[offset + k] * DM.Dx[k * n + j];
-		uy += DM.Dy[k * m + i] * Y[offset + k];
-		uxx += Y[offset + k] * DM.Dxx[k * n + j];
-		uyy += DM.Dyy[k * m + i] * Y[offset + k];
-	}
-
-	/* Compute PDE */
-	double diffusion = parameters.kappa * (uxx + uyy);
-	double convection = v_v1 * ux + v_v2 * uy;
-	double reaction = f(parameters, u, b);
-	return diffusion - convection + reaction;
-}
-
 __device__ double RHSB(Parameters parameters, double *Y, int i, int j) {
 	double u = Y[j * parameters.M + i];
 	double b = Y[j * parameters.M + i + parameters.M * parameters.N];
 	return g(parameters, u, b);
 }
 
-__device__ double RHSU3(Parameters parameters, DiffMats DM, double *Y, int i, int j, int offset) {
-	/* Get actual value of approximations */
-	double u = Y[offset + j * parameters.M + i];
-	double b = Y[offset + j * parameters.M + i + parameters.M * parameters.N];
+__global__ void simulationBlock(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
+	int sim = blockIdx.x;
+	int index = threadIdx.x;
+	int offset = 2 * sim  * parameters.M * parameters.N;
+	for (int k = 1; k <= parameters.L; k++) { 
 
-	/* Evaluate vector field */
-	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-	
-	/* Compute derivatives */
-	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
-	int m = parameters.M;
-	int n = parameters.N;
-	for (int k = 0; k < parameters.N; k++) {
-		ux += Y[offset + k * m + i] * DM.Dx[k * n + j];
-		uy += DM.Dy[k * m + i] * Y[offset + j * m + k];
-		uxx += Y[offset + k * m + i] * DM.Dxx[k * n + j];
-		uyy += DM.Dyy[k * m + i] * Y[offset + j * m + k];
-	}
+		for (int nodes = 0; nodes <= 2 * parameters.M * parameters.N; nodes++) 
+			Y_old[nodes] = Y[offset + nodes];
 
-	/* Compute PDE */
-	double diffusion = parameters.kappa * (uxx + uyy);
-	double convection = v_v1 * ux + v_v2 * uy;
-	double reaction = f(parameters, u, b);
-	return diffusion - convection + reaction;
-}
-
-__device__ double RHSB3(Parameters parameters, double *Y, int i, int j, int offset) {
-	double u = Y[offset + j * parameters.M + i];
-	double b = Y[offset + j * parameters.M + i + parameters.M * parameters.N];
-	return g(parameters, u, b);
-}
-
-__global__ void simulation(Parameters parameters, DiffMats DM, double *Y, double dt) {	
-	int N_exps = parameters.x_ign_n * parameters.y_ign_n;
-	if (blockIdx.x < N_exps) {
-		int idx = threadIdx.x; //blockDim.x * blockIdx.x + threadIdx.x;
-		for (int k = 1; k <= parameters.L; k++) { 
-			int i = idx % parameters.M; // Row index
-			int j = idx / parameters.M; // Col index
-			double y_old = Y[idx];
-			double y_new = 0; // Boundary condition
-
-			/* Inside domain */
-			if (!(i == 0 || i == parameters.M - 1 || i == 2 * parameters.M - 1 || j == 0 || j == parameters.N - 1 || j == 2 * parameters.N - 1)) {
-				if (idx < parameters.M * parameters.N) { // For temperature
-					y_new = RHSU(parameters, DM, Y, i, j); 
-				} else { // For fuel 
-					y_new = RHSB(parameters, Y, i, j);
-				}
-			}
-			Y[idx] = y_old + dt * y_new;
-		}
-	}
-}
-
-// __global__ void simulation(Parameters parameters, DiffMats DM, double *Y, double dt) {	
-// 	int N_exps = parameters.x_ign_n * parameters.y_ign_n;
-// 	if (blockIdx.x < N_exps) {
-// 		int idx = theadblockDim.x * blockIdx.x + threadIdx.x;
-// 		for (int k = 1; k <= parameters.L; k++) { 
-// 			int i = idx % parameters.M; // Row index
-// 			int j = idx / parameters.M; // Col index
-// 			double y_old = Y[idx];
-// 			double y_new = 0; // Boundary condition
-
-// 			/* Inside domain */
-// 			if (!(i == 0 || i == parameters.M - 1 || i == 2 * parameters.M - 1 || j == 0 || j == parameters.N - 1 || j == 2 * parameters.N - 1)) {
-// 				if (idx < parameters.M * parameters.N) { // For temperature
-// 					y_new = RHSU(parameters, DM, Y, i, j); 
-// 				} else { // For fuel 
-// 					y_new = RHSB(parameters, Y, i, j);
-// 				}
-// 			}
-// 			Y[idx] = y_old + dt * y_new;
-// 		}
-// 	}
-// }
-
-__global__ void simulation2(Parameters parameters, DiffMats DM, double *Y, double dt) {
-	extern __shared__ double sm[];
-	//int loop = (parameters.M * parameters.N) / blockDim.x;
-	int loop = 0;
-	for (int k = 0; k < parameters.L; k++) {
-		//for (int sub = 0; sub < loop; sub++) {
-		while (loop < parameters.M * parameters.N) {
-			//int index = blockDim.x * sub + threadIdx.x;
-			int index = threadIdx.x + loop;
-	
+		while (index < parameters.M * parameters.N) {
 			int i = index % parameters.M; // Row index
 			int j = index / parameters.M; // Col index
-			int gindex = blockIdx.x * 2 * parameters.M * parameters.N + j * parameters.M + i;
+			double u_new = 0; // Boundary conditions
+			double b_new = 0; // Boundary conditions
+			
+			int gindex = offset + j * parameters.M + i;
 
-			sm[threadIdx.x] = Y[blockIdx.x * 2 * parameters.M * parameters.N + i * parameters.M + j];
-			//sm[tId] = Y[i * parameters.M + j];
-			double u_old = Y[gindex];
-			double b_old = Y[gindex + parameters.M * parameters.N];
-			double u_new = 0; // Boundary condition
-			double b_new = 0; // Boundary condition
-			//double u_new_2 = 0; // Boundary condition
-			//double b_new_2 = 0; // Boundary condition
+			/* Get actual value of approximations */
+			double u_old = Y_old[gindex];
+			double b_old = Y_old[gindex + parameters.M * parameters.N];
 
-			// if(blockIdx.x == 0 && sub == 0 && k == 0){
-			// 	for (int asd = 2*128*128; asd < 4*parameters.M * parameters.N; asd++) {
-			// 		if (Y[asd] > 0)
-			// 			printf("%f\n",Y[asd]);
-			// 	}
-			// 	//printf("%f %d %d %d %d\n",sm[threadIdx.x], i, j, i * parameters.M + j, blockIdx.x * 2 * parameters.M * parameters.N + i * parameters.M + j);
-			// }
-
-			/* Inside domain */
-			if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-				u_new = RHSU2(parameters, DM, sm, u_old, b_old, i, j, threadIdx.x); 
-				b_new = g(parameters, u_old, b_old);//RHSB(parameters, sm, i, j);
-
+			/* PDE */
+			if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
+				double fuel = g(parameters, u_old, b_old);
+				u_new = RHSU(parameters, DM, Y_old + offset, i, j);
+				b_new = fuel;
 			}
-			//u_new = 1;
+			/* Update values using Euler method */
 			Y[gindex] = u_old + dt * u_new;
 			Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
-			loop += threadIdx.x;
+			index += blockDim.x;
 		}
 		__syncthreads();
-	}
-}
-
-__global__ void simulation3(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt, int size) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	//size = parameters.M * parameters.N;
-	if (tId < size) {
-		int sim = tId / (2 * parameters.M * parameters.N);
-		int i = tId % parameters.M;//(tId - sim * 2 * parameters.M * parameters.N) % (parameters.M); // Row index
-		int j = tId / parameters.M;//(tId - sim * 2 * parameters.M * parameters.N) / (parameters.M); // Col index
-		// int i = (tId - sim * 2 * parameters.M * parameters.N) % parameters.M; // Row index
-		// int j = (tId - sim * 2 * parameters.M * parameters.N) / (2 * parameters.M); // Col index
-		double y_old = Y_old[tId];
-		double y_new = 0; // Boundary condition
-		if (sim > 0) printf("sim: %d\n", sim);
-
-		/* Inside domain */
-		if (!(i == 0 || i == parameters.M - 1 || i == 2 * parameters.M - 1 || j == 0 || j == parameters.N - 1 || j == 2 * parameters.N - 1)) {
-		//if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			if (tId < parameters.M * parameters.N) { // For temperature
-				y_new = RHSU(parameters, DM, Y_old, i, j); 
-
-			} else { // For fuel
-				y_new = RHSB(parameters, Y_old, i, j);
-			}
-			//if (tId > 2 * sim * parameters.M * parameters.N && tId < (2 * sim + 1) * parameters.N * parameters.M) { // For temperature
-			//if (i < parameters.M && j < parameters.M) {
-			// 	y_new = RHSU(parameters, DM, Y_old + sim * 2 * parameters.M * parameters.N, i, j);
-			// 	//y_new = RHSU3(parameters, DM, Y_old, i, j, sim * 2 * parameters.M * parameters.N);
-			// } else { // For fuel
-			// 	y_new = RHSB(parameters, Y_old + sim * 2 * parameters.M * parameters.N, i, j);
-			// 	//y_new = RHSB3(parameters, Y_old, i, j, sim * 2 * parameters.M * parameters.N);
-			// }
-			//printf("yold: %f, ynew: %f\n", y_old, y_new);
-		}
-		Y[tId] = y_old  + dt * y_new;
-		//__syncthreads();
-		//Y[tId] = y_new;
 	}
 }
 
@@ -317,30 +161,11 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *
 
 		/* PDE */
     if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-			
-			/* Evaluate vector field */
-      double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-			double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-			
-			/* Compute derivatives */
-      double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
-      int m = parameters.M;
-      int n = parameters.N;
-      for (int k = 0; k < parameters.N; k++) {
-        ux += Y_old[offset + k * m + i] * DM.Dx[k * n + j];
-        uy += DM.Dy[k * m + i] * Y_old[offset + j * m + k];
-        uxx += Y_old[offset + k * m + i] * DM.Dxx[k * n + j];
-        uyy += DM.Dyy[k * m + i] * Y_old[offset + j * m + k];				
-      }
-
-			/* Compute PDE */
-      double diffusion = parameters.kappa * (uxx + uyy);
-      double convection = v_v1 * ux + v_v2 * uy;
-      double reaction = f(parameters, u_old, b_old);
       double fuel = g(parameters, u_old, b_old);
-      u_new = diffusion - convection + reaction;
+      u_new = RHSU(parameters, DM, Y_old + offset, i, j);
       b_new = fuel;
 		}
+
 		/* Update values using Euler method */
     Y[gindex] = u_old + dt * u_new;
 		Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
@@ -349,14 +174,11 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *
 
 /*
 	Right hand side using Euler method.
-	This approach use all threads to compute each node of all simulations.
+	This approach use each block for a single simulation.
 	Kernel time: 54.407ms 
 */
 __global__ void RHSEulerBlock(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
-	//int tId = threadIdx.x;// + blockIdx.x * blockDim.x;
-	//int n_sim = parameters.x_ign_n * parameters.y_ign_n;
 	int sim = blockIdx.x;
-	//int loop = 0;
 	int index = threadIdx.x;
   while (index < parameters.M * parameters.N) {
 		int i = index % parameters.M; // Row index
@@ -372,28 +194,8 @@ __global__ void RHSEulerBlock(Parameters parameters, DiffMats DM, double *Y, dou
 
 		/* PDE */
     if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-			
-			/* Evaluate vector field */
-      double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-			double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-			
-			/* Compute derivatives */
-      double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
-      int m = parameters.M;
-      int n = parameters.N;
-      for (int k = 0; k < parameters.N; k++) {
-        ux += Y_old[offset + k * m + i] * DM.Dx[k * n + j];
-        uy += DM.Dy[k * m + i] * Y_old[offset + j * m + k];
-        uxx += Y_old[offset + k * m + i] * DM.Dxx[k * n + j];
-        uyy += DM.Dyy[k * m + i] * Y_old[offset + j * m + k];				
-      }
-
-			/* Compute PDE */
-      double diffusion = parameters.kappa * (uxx + uyy);
-      double convection = v_v1 * ux + v_v2 * uy;
-      double reaction = f(parameters, u_old, b_old);
       double fuel = g(parameters, u_old, b_old);
-      u_new = diffusion - convection + reaction;
+      u_new = RHSU(parameters, DM, Y_old + offset, i, j);
       b_new = fuel;
 		}
 		/* Update values using Euler method */
@@ -404,22 +206,160 @@ __global__ void RHSEulerBlock(Parameters parameters, DiffMats DM, double *Y, dou
 	__syncthreads();
 }
 
+__global__ void sumVector(Parameters parameters, double *c, double *a, double *b, double scalar, int size) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	if (tId < size) {
+		c[tId] = a[tId] + scalar * b[tId];
+	}
+}
+
+
+/*
+	Right hand side using RK4 method.
+	This approach use all threads to compute each node of all simulations.
+	Kernel time: 67.005ms 
+*/
+__global__ void RHSRK4(Parameters parameters, DiffMats DM, double *Y, double *Y_old, 
+	double *k1, double *k2, double *k3, double *k4, double dt) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
+  if (tId < n_sim * parameters.M * parameters.N) {
+		int sim = tId / (parameters.M * parameters.N);
+		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
+		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
+    double u_new = 0; // Boundary conditions
+		double b_new = 0; // Boundary conditions
+		int offset = 2 * sim  * parameters.M * parameters.N;
+		int gindex = offset + j * parameters.M + i;
+
+		/* Get actual value of approximations */
+		double u_old = Y_old[gindex];
+		double b_old = Y_old[gindex + parameters.M * parameters.N];
+		double u_k1 = 0, u_k2 = 0, u_k3 = 0, u_k4 = 0;
+		double b_k1 = 0, b_k2 = 0, b_k3 = 0, b_k4 = 0; 
+
+		/* PDE */
+    if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
+      //double fuel = g(parameters, u_old, b_old);
+      //u_new = RHSU(parameters, DM, Y_old, i, j);
+			//b_new = fuel;
+			u_k1 = RHSU(parameters, DM, k1 + offset, i, j); 
+			u_k2 = RHSU(parameters, DM, k2 + offset, i, j); 
+			u_k3 = RHSU(parameters, DM, k3 + offset, i, j); 
+			u_k4 = RHSU(parameters, DM, k4 + offset, i, j); 
+			b_k1 = g(parameters, k1[gindex], k1[gindex + parameters.M * parameters.N]);
+			b_k2 = g(parameters, k2[gindex], k2[gindex + parameters.M * parameters.N]);
+			b_k3 = g(parameters, k3[gindex], k3[gindex + parameters.M * parameters.N]);
+			b_k4 = g(parameters, k4[gindex], k4[gindex + parameters.M * parameters.N]);
+			u_new = u_k1 + 2 * u_k2 + 2 * u_k3 + u_k4;
+			b_new = b_k1 + 2 * b_k2 + 2 * b_k3 + b_k4;
+		}
+
+		/* Update values using Euler method */
+    Y[gindex] = u_old + (1.0 / 6.0) * dt * u_new;
+		Y[gindex + parameters.M * parameters.N] = b_old + (1.0 / 6.0) * dt * b_new;
+  }
+}
+
+/*
+	Right hand side using RK4 method.
+	This approach use each block for a single simulation.
+	Kernel time: 54.407ms 
+*/
+// __global__ void RHSRK4Block(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
+// 	int sim = blockIdx.x;
+// 	int index = threadIdx.x;
+//   while (index < parameters.M * parameters.N) {
+// 		int i = index % parameters.M; // Row index
+// 		int j = index / parameters.M; // Col index
+//     double u_new = 0; // Boundary conditions
+// 		double b_new = 0; // Boundary conditions
+// 		int offset = 2 * sim  * parameters.M * parameters.N;
+// 		int gindex = offset + j * parameters.M + i;
+
+// 		/* Get actual value of approximations */
+// 		double u_old = Y_old[gindex];
+// 		double b_old = Y_old[gindex + parameters.M * parameters.N];
+
+// 		/* PDE */
+//     if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
+//       double fuel = g(parameters, u_old, b_old);
+//       u_new = RHSU(parameters, DM, Y_old + offset, i, j);
+//       b_new = fuel;
+// 		}
+// 		/* Update values using Euler method */
+//     Y[gindex] = u_old + dt * u_new;
+// 		Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
+// 		index += blockDim.x;
+// 	}
+// 	__syncthreads();
+// }
+
 void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n; // Number of wildfire simulations
 	int size = 2 * n_sim * parameters.M * parameters.N;
 
-	double *d_Y_tmp;
-	cudaMalloc(&d_Y_tmp, size * sizeof(double));
+	/* Spatial method */
+	if (strcmp(parameters.time, "Euler") == 0) {
 
-	for (int k = 1; k <= parameters.L; k++) { 
-		cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
-		//simulation2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
-		//simulation3<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt, size);
-		//RHSEuler<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
-		RHSEulerBlock<<<n_sim, DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
+		printf("Euler method in time\n");
+
+		/* Temporal array for previous time step */
+		double *d_Y_tmp;
+		cudaMalloc(&d_Y_tmp, size * sizeof(double));
+
+		/* GPU parallel approach */
+		if (strcmp(parameters.approach, "all") == 0) {
+			for (int k = 1; k <= parameters.L; k++) { 
+				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
+				RHSEuler<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
+			}
+		} else if (strcmp(parameters.approach, "block") == 0) {
+			for (int k = 1; k <= parameters.L; k++) { 
+				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
+				RHSEulerBlock<<<n_sim, DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
+			}
+		}
+
+		cudaFree(d_Y_tmp);
+
+	} else if (strcmp(parameters.time, "RK4") == 0) {
+
+		printf("RK4 method in time \n");
+
+		/* Temporal arrays for previous ks */
+		double *d_Y_tmp, *d_k1, *d_k2, *d_k3, *d_k4;
+
+		cudaMalloc(&d_k1, size * sizeof(double));
+		cudaMalloc(&d_k2, size * sizeof(double));
+		cudaMalloc(&d_k3, size * sizeof(double));
+		cudaMalloc(&d_k4, size * sizeof(double));
+		cudaMalloc(&d_Y_tmp, size * sizeof(double));
+		cudaMemset(d_k1, 0, size * sizeof(double));
+		cudaMemset(d_k2, 0, size * sizeof(double));
+		cudaMemset(d_k3, 0, size * sizeof(double));
+		cudaMemset(d_k4, 0, size * sizeof(double));
+
+		for (int k = 1; k <= parameters.L; k++) { 
+			//RHSRK4<<<grid_size, block_size>>>(parameters, DM, d_Y, dt);  
+			cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
+			cudaDeviceSynchronize();
+			sumVector<<<DG(size), DB>>>(parameters, d_k1, d_Y, d_k1, 0, size);
+			cudaDeviceSynchronize();
+			sumVector<<<DG(size), DB>>>(parameters, d_k2, d_Y, d_k1, 0.5 * dt, size);
+			cudaDeviceSynchronize();
+			sumVector<<<DG(size), DB>>>(parameters, d_k3, d_Y, d_k2, 0.5 * dt, size);
+			cudaDeviceSynchronize();
+			sumVector<<<DG(size), DB>>>(parameters, d_k4, d_Y, d_k3, dt, size);
+			cudaDeviceSynchronize();
+			RHSRK4<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt);   
+		}
+
+		cudaFree(d_k1);
+		cudaFree(d_k2);
+		cudaFree(d_k3);
+		cudaFree(d_k4);
 	}
-
-	cudaFree(d_Y_tmp);
 }
 
 void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
@@ -433,12 +373,9 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 		dx_ign = 1;
 		dy_ign = 1;
 	}
-	//double dx_ign = (parameters.x_ign_max - parameters.x_ign_min) / (parameters.x_ign_n - 1);
-	//double dy_ign = (parameters.y_ign_max - parameters.y_ign_min) / (parameters.y_ign_n - 1);	
-	//double x_ign, y_ign;
 
 	/* To save IC */
-	char sim_name[25];
+	char sim_name[40];
 
 	/* Temporal arrays */
 	double *d_tmp;
@@ -458,35 +395,29 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 
 			/* Compute initial condition for temperature */
 			U0<<<DG(parameters.M * parameters.N), DB>>>(parameters, d_tmp, x_ign, y_ign);
-			// cudaMemcpy(d_sims + (2 * parameters.M * parameters.N * (j * parameters.y_ign_n + i)), 
-			// 	d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			cudaMemcpy(d_sims + 2*sim_*parameters.M*parameters.N, 
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
 			/* Save temperature IC */
 			if (save) {
-				// cudaMemcpy(h_tmp, d_sims + (2 * parameters.M * parameters.N * (j * parameters.y_ign_n + i)), 
-				// 	parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				cudaMemcpy(h_tmp, d_sims + 2*sim_*parameters.M*parameters.N, 
 					parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
+				// sprintf(sim_name, "test/output/%s/%s0_%d%d.txt", parameters.sim_id, "U", i, j); // Simulation name
 				sprintf(sim_name, "test/output/%s0_%d%d.txt", "U", i, j); // Simulation name
 				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N); // Save U0
 			}
 			
 			/* Compute initial condition for fuel */
 			B0<<<DG(parameters.M * parameters.N), DB>>>(parameters, d_tmp);
-			// cudaMemcpy(d_sims + parameters.M * parameters.N + (parameters.M * parameters.N * (j*parameters.y_ign_n + i)), 
-			// 	d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			cudaMemcpy(d_sims + (2*sim_+1) * parameters.M * parameters.N, 
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
 			/* Save fuel IC */
 			if (save) {
-				//cudaMemcpy(h_tmp, d_sims + parameters.M * parameters.N + (parameters.M * parameters.N * (j*parameters.y_ign_n + i)), parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				cudaMemcpy(h_tmp, d_sims + (2*sim_+1) * parameters.M * parameters.N, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
-
 				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
+				//sprintf(sim_name, "test/output/%s/%s0_%d%d.txt", parameters.sim_id, "B", i, j); // Simulation name
 				sprintf(sim_name, "test/output/%s0_%d%d.txt", "B", i, j); // Simulation name
 				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B0	 
 			}		
@@ -502,7 +433,7 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 
 void saveResults(Parameters parameters, double *h_sims) {
 	/* Simulation name */
-	char sim_name[25];
+	char sim_name[40];
 
 	/* Temporal array */
 	double *h_tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
@@ -512,20 +443,18 @@ void saveResults(Parameters parameters, double *h_sims) {
 		for (int j=0; j < parameters.x_ign_n; j++) {	
 
 			/* Temperature */
-			// memcpy(h_tmp, h_sims + (2 * parameters.M * parameters.N * (j * parameters.y_ign_n + i)), 
-			// 	parameters.M * parameters.N * sizeof(double));
 			memcpy(h_tmp, h_sims + 2*sim_*parameters.M*parameters.N, 
 				parameters.M * parameters.N * sizeof(double));
 			memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
+			//sprintf(sim_name, "test/output/%s/%s_%d%d.txt", parameters.sim_id, "U", i, j); // Simulation name
 			sprintf(sim_name, "test/output/%s_%d%d.txt", "U", i, j); // Simulation name
 			saveApproximation(sim_name, h_tmp, parameters.M, parameters.N); // Save U
 
 			/* Fuel */
-			// memcpy(h_tmp, h_sims + parameters.M * parameters.N + (parameters.M * parameters.N * (j*parameters.y_ign_n + i)), 
-			// 	parameters.M * parameters.N * sizeof(double));
 			memcpy(h_tmp, h_sims + (2*sim_ + 1)*parameters.M*parameters.N, 
 				parameters.M * parameters.N * sizeof(double));
 			memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
+			//sprintf(sim_name, "test/output/%s/%s_%d%d.txt", parameters.sim_id,"B", i, j); // Simulation name
 			sprintf(sim_name, "test/output/%s_%d%d.txt", "B", i, j); // Simulation name
 			saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B	
 
@@ -539,8 +468,6 @@ void wildfire(Parameters parameters) {
 	/* Kernel Parameters */
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n; // Number of wildfire simulations
 	int size = 2 * n_sim * parameters.M * parameters.N;
-	//int grid_size = (int) ceil((float)size / THREADS_PER_BLOCK);
-	//int grid_size_DM = (parameters.M * parameters.N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
 	/* Domain differentials */
 	double dx = (parameters.x_max - parameters.x_min) / (parameters.N-1);
@@ -550,8 +477,6 @@ void wildfire(Parameters parameters) {
 	printf("dx: %f\n", dx);
 	printf("dy: %f\n", dy);
 	printf("dt: %f\n", dt);
-	printf("Simulations size: %d\n", size);
-	//printf("Size: %d\n", DG(size));
 
 	/* Memory for simulations */
 	double *h_sims = (double *) malloc(size * sizeof(double));
@@ -617,7 +542,11 @@ void wildfire(Parameters parameters) {
 
 	// /* ODE Integration */
 	ODESolver(parameters, DM, d_sims, dt);
-	//simulation2<<<100, DB, DB * sizeof(double)>>>(parameters, DM, d_sims, dt);
+	// double *d_tmp;
+	// cudaMalloc(&d_tmp, 2 * parameters.M * parameters.N * sizeof(double));
+	// cudaMemset(d_tmp, 0, 2 * parameters.M * parameters.N  * sizeof(double));
+
+	// simulationBlock<<<n_sim, DB, DB * sizeof(double)>>>(parameters, DM, d_sims, d_tmp, dt);
 
 	//cudaDeviceSynchronize();
 
