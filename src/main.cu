@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 	parameters.x_max = 90;
 	parameters.y_min = 0;
 	parameters.y_max = 90;
-	parameters.t_max = 50;
+	parameters.t_max = 25;
 
 	/* Domain definition */
 	parameters.L = 75; // Time resolution
