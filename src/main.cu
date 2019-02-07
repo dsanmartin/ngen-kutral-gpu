@@ -35,23 +35,22 @@ int main(int argc, char *argv[]) {
 	parameters.N = 128; // Spatial resolution (x-axis - matrix columns)
 
 	/* Methods */
-	parameters.spatial = "FD";
-	parameters.time = argv[1];//"Euler";
-	parameters.approach = argv[4];	
+	parameters.spatial = argv[1]; // "FD" or "Cheb"
+	parameters.time = argv[2]; // "Euler" or "RK4"
+	parameters.approach = argv[5]; // Time solver approach "all" threads o "block" per simulation	
 
 	/* Ignition points */
-	parameters.x_ign_min = -20;
+	parameters.x_ign_min = -80;
 	parameters.x_ign_max = -20;
-	parameters.y_ign_min = -20;
+	parameters.y_ign_min = -80;
 	parameters.y_ign_max = -20;
-	parameters.x_ign_n = atoi(argv[2]);//5;
-	parameters.y_ign_n = atoi(argv[3]);//5;
-	// parameters.x_ign_min = -20;
-	// parameters.x_ign_max = -20;
-	// parameters.y_ign_min = -20;
-	// parameters.y_ign_max = -20;
-	// parameters.x_ign_n = 1;
-	// parameters.y_ign_n = 1;
+	parameters.x_ign_n = atoi(argv[3]); // Number of ignition points in x
+	parameters.y_ign_n = atoi(argv[4]);// Number of ignition points in y
+
+	if (parameters.x_ign_n == 1 && parameters.y_ign_n == 1) {
+		parameters.x_ign_min = parameters.x_ign_max;
+		parameters.y_ign_min = parameters.y_ign_max;
+	}
 
 	// /* Simulation ID */
   // strftime (buff, 15, "%Y%m%d%H%M%S", localtime (&now));

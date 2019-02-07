@@ -60,23 +60,19 @@ __global__ void ChebyshevMatrix(double *CDM, double *x_c, int N) {
       CDM[j * (N + 1) + i] = c_i * pow(-1.0, i + j) / (c_j * (x_c[i] - x_c[j]));
     }
   }
-
 }
 
-/* First derivative finite difference matrix */
-void FD1(double *D1N, int M, double h, int block_size, int grid_size) {
-  FD1Kernel<<<grid_size, block_size>>>(D1N, M, h);
-}
+__global__ void Chebyshev2Matrix(double *CDM2, double *CDM, int N) {
+  int tId = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tId < (N + 1) * (N + 1)) {
+    int i = tId % (N + 1); // Row index
+    int j = tId / (N + 1); // Col index
+    double c = 0;
+    
+    for (int k = 0; k < N + 1; k++) {
+      c += CDM[k * (N + 1) + i] * CDM[j * (N + 1) + k];
+    }
 
-/* Second derivative finite difference matrix */
-void FD2(double *D2N, int M, double h, int block_size, int grid_size) {
-  FD2Kernel<<<grid_size, block_size>>>(D2N, M, h);
-}
-
-/* Chebyshev nodes and differentiation matrix */
-void Chebyshev(double *CDM, double *x_c, int N, int grid_size, int block_size) {
-  /* Nodes */
-  ChebyshevNodes<<<grid_size, block_size>>>(x_c, N);
-  /* Matrix */
-  ChebyshevMatrix<<<grid_size, block_size>>>(CDM, x_c, N);
+    CDM2[tId] = c;
+  }
 }

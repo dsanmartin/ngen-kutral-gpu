@@ -589,19 +589,38 @@ void wildfire(Parameters parameters) {
 	cudaMemcpy(d_Dxx, h_Dxx, parameters.N * parameters.N * sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_Dyy, h_Dyy, parameters.M * parameters.M * sizeof(double), cudaMemcpyHostToDevice);
 
-	/* Fill spatial domain */
-	fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_x, dx, parameters.N);
-	fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_y, dy, parameters.N);
+	/* Fill spatial domain and differentiation matrices */
+	if (strcmp(parameters.spatial, "FD") == 0) {
+		// Spatial domain
+		fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_x, dx, parameters.N);
+		fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_y, dy, parameters.M);
 
+		// Differentiation matrices
+		FD1Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dx, parameters.N, dx);
+		FD1Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dy, parameters.M, dy);
+		FD2Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dxx, parameters.N, dx);
+		FD2Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dyy, parameters.M, dy);
+
+	} else if (strcmp(parameters.spatial, "Cheb") == 0) {
+		// Spatial domain
+		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_x, parameters.N - 1);
+		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_y, parameters.M - 1);
+
+		// Differentiation matrices
+		ChebyshevMatrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dx, d_x, parameters.N - 1);
+		ChebyshevMatrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dy, d_y, parameters.M - 1);
+		Chebyshev2Matrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dxx, d_Dx, parameters.N - 1);
+		Chebyshev2Matrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dyy, d_Dy, parameters.M - 1);
+
+	} else {
+		printf("Spatial domain error\n");
+		exit(0);
+	}
+	
 	/* Copy spatial domain to constant memory */
 	cudaMemcpyToSymbol(buffer, d_x, parameters.N * sizeof(double), 0, cudaMemcpyDeviceToDevice);
 	cudaMemcpyToSymbol(buffer, d_y, parameters.M * sizeof(double), parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
-
-	/* Fill differentiation matrices */
-	FD1Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dx, parameters.N, dx);
-	FD1Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dy, parameters.M, dy);
-	FD2Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dxx, parameters.N, dx);
-	FD2Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dyy, parameters.M, dy);
+	
 	DM.Dx = d_Dx;
 	DM.Dy = d_Dy;
 	DM.Dxx = d_Dxx;
@@ -610,7 +629,7 @@ void wildfire(Parameters parameters) {
 	/* Fill initial conditions */	
 	fillInitialConditions(parameters, d_sims, 1);
 
-	// /* ODE Integration */
+	/* ODE Integration */
 	ODESolver(parameters, DM, d_sims, dt);
 	// double *d_tmp;
 	// cudaMalloc(&d_tmp, 2 * parameters.M * parameters.N * sizeof(double));
