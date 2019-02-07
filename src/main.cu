@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 	parameters.t_max = 50;
 
 	/* Domain definition */
-	parameters.L = 500; // Time resolution
+	parameters.L = 75; // Time resolution
 	parameters.M = 128; // Spatial resolution (y-axis - matrix rows)
 	parameters.N = 128; // Spatial resolution (x-axis - matrix columns)
 
