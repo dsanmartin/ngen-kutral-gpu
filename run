@@ -1,2 +1,2 @@
 #!/bin/bash
-./bin/ngen-kutral FD RK4 1 1 all
+./bin/ngen-kutral FD RK4 128 128 75 10 10 all

@@ -213,7 +213,7 @@ __global__ void sumVector(Parameters parameters, double *c, double *a, double *b
 	}
 }
 
-/* Compute RHS using all threads */
+/* Compute RHS using all threads 43.5ms */
 __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *vec) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
@@ -307,7 +307,7 @@ __global__ void RHSRK4(Parameters parameters, DiffMats DM, double *Y, double *Y_
 /*
 	Right hand side using RK4 method.
 	This approach use each block for a single simulation.
-	Kernel time: 1.0530ms
+	Kernel time: 2.642ms
 */
 __global__ void RHSRK4Block(Parameters parameters, DiffMats DM, double *Y, double *Y_old,
 	double *k1, double *k2, double *k3, double *k4, double dt) {
@@ -341,7 +341,7 @@ __global__ void RHSRK4Block(Parameters parameters, DiffMats DM, double *Y, doubl
 			b_new = b_k1 + 2 * b_k2 + 2 * b_k3 + b_k4;
 		}
 
-		/* Update values using Euler method */
+		/* Update values using RK4 method */
     Y[gindex] = u_old + (1.0 / 6.0) * dt * u_new;
 		Y[gindex + parameters.M * parameters.N] = b_old + (1.0 / 6.0) * dt * b_new;
 		index += blockDim.x;
@@ -353,10 +353,11 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n; // Number of wildfire simulations
 	int size = 2 * n_sim * parameters.M * parameters.N;
 
-	/* Spatial method */
+	/* Time method */
 	if (strcmp(parameters.time, "Euler") == 0) {
 
 		printf("Euler method in time\n");
+		printf("dt: %f\n", dt);
 
 		/* Temporal array for previous time step */
 		double *d_Y_tmp;
@@ -380,6 +381,7 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 	} else if (strcmp(parameters.time, "RK4") == 0) {
 
 		printf("RK4 method in time \n");
+		printf("dt: %f\n", dt);
 
 		/* Temporal arrays for previous ks */
 		double *d_Y_tmp, *d_k1, *d_k2, *d_k3, *d_k4, *d_ktmp;
@@ -412,14 +414,26 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 		} else if (strcmp(parameters.approach, "block") == 0) {
 			for (int k = 1; k <= parameters.L; k++) { 
 				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice); // Y_{t-1}
-				RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
+				//RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
+				RHSvec<<<DG(size), DB>>>(parameters, DM, d_k1, d_Y_tmp);
+				//cudaDeviceSynchronize();
 				sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
-				RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
+				//cudaDeviceSynchronize();
+				//RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
+				RHSvec<<<DG(size), DB>>>(parameters, DM, d_k2, d_ktmp);
+				//cudaDeviceSynchronize();
 				sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
-				RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
+				//cudaDeviceSynchronize();
+				//RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
+				RHSvec<<<DG(size), DB>>>(parameters, DM, d_k3, d_ktmp);
+				//cudaDeviceSynchronize();
 				sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
-				RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
+				//cudaDeviceSynchronize();
+				//RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
+				RHSvec<<<DG(size), DB>>>(parameters, DM, d_k4, d_ktmp);
+				//cudaDeviceSynchronize();
 				RHSRK4Block<<<n_sim, DB>>>(parameters, DM, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt); // RK4
+				//cudaDeviceSynchronize();
 			}
 		}
 
@@ -544,10 +558,6 @@ void wildfire(Parameters parameters) {
 	double dy = (parameters.y_max - parameters.y_min) / (parameters.M-1);
 	double dt = parameters.t_max / parameters.L;
 
-	printf("dx: %f\n", dx);
-	printf("dy: %f\n", dy);
-	printf("dt: %f\n", dt);
-
 	/* Memory for simulations */
 	double *h_sims = (double *) malloc(size * sizeof(double));
 	double *d_sims;	
@@ -590,8 +600,12 @@ void wildfire(Parameters parameters) {
 	cudaMemcpy(d_Dyy, h_Dyy, parameters.M * parameters.M * sizeof(double), cudaMemcpyHostToDevice);
 
 	/* Fill spatial domain and differentiation matrices */
-	if (strcmp(parameters.spatial, "FD") == 0) {
+	if (strcmp(parameters.spatial, "FD") == 0) {		
 		// Spatial domain
+		printf("Finite Difference in space\n");
+		printf("dx: %f\n", dx);
+		printf("dy: %f\n", dy);	
+
 		fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_x, dx, parameters.N);
 		fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_y, dy, parameters.M);
 
@@ -603,6 +617,8 @@ void wildfire(Parameters parameters) {
 
 	} else if (strcmp(parameters.spatial, "Cheb") == 0) {
 		// Spatial domain
+		printf("Chebyshev in space\n");
+
 		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_x, parameters.N - 1);
 		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_y, parameters.M - 1);
 
@@ -615,7 +631,7 @@ void wildfire(Parameters parameters) {
 	} else {
 		printf("Spatial domain error\n");
 		exit(0);
-	}
+	}	
 	
 	/* Copy spatial domain to constant memory */
 	cudaMemcpyToSymbol(buffer, d_x, parameters.N * sizeof(double), 0, cudaMemcpyDeviceToDevice);

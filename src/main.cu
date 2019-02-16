@@ -30,22 +30,22 @@ int main(int argc, char *argv[]) {
 	parameters.t_max = 25;
 
 	/* Domain definition */
-	parameters.L = 75; // Time resolution
-	parameters.M = 128; // Spatial resolution (y-axis - matrix rows)
-	parameters.N = 128; // Spatial resolution (x-axis - matrix columns)
+	parameters.L = atoi(argv[5]); // Time resolution
+	parameters.M = atoi(argv[3]); // Spatial resolution (y-axis - matrix rows)
+	parameters.N = atoi(argv[4]); // Spatial resolution (x-axis - matrix columns)
 
 	/* Methods */
 	parameters.spatial = argv[1]; // "FD" or "Cheb"
 	parameters.time = argv[2]; // "Euler" or "RK4"
-	parameters.approach = argv[5]; // Time solver approach "all" threads o "block" per simulation	
+	parameters.approach = argv[8]; // Time solver approach "all" threads o "block" per simulation	
 
 	/* Ignition points */
 	parameters.x_ign_min = -80;
 	parameters.x_ign_max = -20;
 	parameters.y_ign_min = -80;
 	parameters.y_ign_max = -20;
-	parameters.x_ign_n = atoi(argv[3]); // Number of ignition points in x
-	parameters.y_ign_n = atoi(argv[4]);// Number of ignition points in y
+	parameters.x_ign_n = atoi(argv[6]); // Number of ignition points in x
+	parameters.y_ign_n = atoi(argv[7]);// Number of ignition points in y
 
 	if (parameters.x_ign_n == 1 && parameters.y_ign_n == 1) {
 		parameters.x_ign_min = parameters.x_ign_max;
