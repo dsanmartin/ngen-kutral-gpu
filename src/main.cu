@@ -41,9 +41,9 @@ int main(int argc, char *argv[]) {
 
 	/* Ignition points */
 	parameters.x_ign_min = 20;
-	parameters.x_ign_max = 80;
+	parameters.x_ign_max = 70;
 	parameters.y_ign_min = 20;
-	parameters.y_ign_max = 80;
+	parameters.y_ign_max = 70;
 	parameters.x_ign_n = atoi(argv[6]); // Number of ignition points in x
 	parameters.y_ign_n = atoi(argv[7]);// Number of ignition points in y
 
