@@ -10,11 +10,11 @@
 
 int main(int argc, char *argv[]) {
 	
-	// /* Info for directory simulation */
-	// char buff[15];
-	// char directory[40];
-	// time_t now = time (0);
-	// struct stat st = {0};
+	/* Info for directory simulation */
+	char buff[15];
+	char directory[40];
+	time_t now = time (0);
+	struct stat st = {0};
 
 	/* PDE parameters */
 	Parameters parameters;
@@ -40,27 +40,28 @@ int main(int argc, char *argv[]) {
 	parameters.approach = argv[8]; // Time solver approach "all" threads o "block" per simulation	
 
 	/* Ignition points */
-	parameters.x_ign_min = -80;
-	parameters.x_ign_max = -20;
-	parameters.y_ign_min = -80;
-	parameters.y_ign_max = -20;
+	parameters.x_ign_min = 20;
+	parameters.x_ign_max = 80;
+	parameters.y_ign_min = 20;
+	parameters.y_ign_max = 80;
 	parameters.x_ign_n = atoi(argv[6]); // Number of ignition points in x
 	parameters.y_ign_n = atoi(argv[7]);// Number of ignition points in y
 
-	if (parameters.x_ign_n == 1 && parameters.y_ign_n == 1) {
-		parameters.x_ign_min = parameters.x_ign_max;
-		parameters.y_ign_min = parameters.y_ign_max;
-	}
-
-	// /* Simulation ID */
-  // strftime (buff, 15, "%Y%m%d%H%M%S", localtime (&now));
-	// parameters.sim_id = (const char*) buff;	
-
-	// /* Create simulation directory */
-	// sprintf(directory, "test/output/%s/", parameters.sim_id);
-	// if (stat(directory, &st) == -1) {
-	// 		mkdir(directory, 0700);
+	// if (parameters.x_ign_n == 1 && parameters.y_ign_n == 1) {
+	// 	parameters.x_ign_min = parameters.x_ign_max;
+	// 	parameters.y_ign_min = parameters.y_ign_max;
 	// }
+
+	/* Simulation ID */
+  strftime (buff, 15, "%Y%m%d%H%M%S", localtime (&now));
+	parameters.sim_id = (const char*) buff;	
+
+	/* Create simulation directory */
+	sprintf(directory, "test/output/%s/", parameters.sim_id);
+	if (stat(directory, &st) == -1) {
+		mkdir(directory, 0700);
+		parameters.dir = (const char*) directory;
+	}
 
 	/* Simulations */
 	wildfire(parameters);

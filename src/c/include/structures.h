@@ -25,6 +25,7 @@ struct _parameters {
   const char *time;
 	const char *approach;
 	const char *sim_id;
+	const char *dir;
 } typedef Parameters;
 
 struct _diffmats {
