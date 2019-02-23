@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #include "include/wildfire.cuh"
 #include "include/diffmat.cuh"
 #include "include/utils.cuh"
@@ -572,6 +573,8 @@ void wildfire(Parameters parameters) {
 	double *h_y = (double *) malloc(parameters.M * sizeof(double));
 	double *d_x, *d_y;
 
+	printf("Simulation ID: %s\n", parameters.sim_id);
+
 	/* Write parameters in log */
 	fprintf(log, "Simulation ID: %s\n", parameters.sim_id);
 	fprintf(log, "Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);
@@ -596,7 +599,7 @@ void wildfire(Parameters parameters) {
 	fprintf(log, "Method: %s\n", parameters.time);
 	fprintf(log, "L: %d\n", parameters.L);
 	fprintf(log, "dt: %f\n", dt);		
-	fclose(log);
+	
 
 	/* Differentiation Matrices */
 	
@@ -681,21 +684,24 @@ void wildfire(Parameters parameters) {
 	/* Fill initial conditions */	
 	fillInitialConditions(parameters, d_sims, 1);
 
+	clock_t begin = clock();
+
 	/* ODE Integration */
 	ODESolver(parameters, DM, d_sims, dt);
-	// double *d_tmp;
-	// cudaMalloc(&d_tmp, 2 * parameters.M * parameters.N * sizeof(double));
-	// cudaMemset(d_tmp, 0, 2 * parameters.M * parameters.N  * sizeof(double));
 
-	// simulationBlock<<<n_sim, DB, DB * sizeof(double)>>>(parameters, DM, d_sims, d_tmp, dt);
-
-	//cudaDeviceSynchronize();
+	clock_t end = clock();
+	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+	printf("Execution time: %f [s]\n", time_spent);
+	fprintf(log, "\nExecution time: %f [s]\n", time_spent);
 
 	/* Copy approximations to host */
 	cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
 
 	/* Save */
 	saveResults(parameters, h_sims);
+
+	/* Close log file */
+	fclose(log);
 
 	/* Memory free */
 	cudaFree(d_sims);
