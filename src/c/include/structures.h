@@ -21,6 +21,7 @@ struct _parameters {
   int N;
 	int x_ign_n;
 	int y_ign_n;
+	const char *exp_id;
   const char *spatial;
   const char *time;
 	const char *approach;
@@ -36,3 +37,5 @@ struct _diffmats {
 } typedef DiffMats;
 
 #endif
+
+#define DIR_LEN 1024

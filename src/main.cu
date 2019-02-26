@@ -11,8 +11,8 @@
 int main(int argc, char *argv[]) {
 	
 	/* Info for directory simulation */
-	char buff[15];
-	char directory[40];
+	char buff[32];
+	char directory[DIR_LEN];
 	time_t now = time (0);
 	struct stat st = {0};
 
@@ -47,13 +47,15 @@ int main(int argc, char *argv[]) {
 	parameters.x_ign_n = atoi(argv[6]); // Number of ignition points in x
 	parameters.y_ign_n = atoi(argv[7]);// Number of ignition points in y
 
+	parameters.exp_id = argv[9];
 	// if (parameters.x_ign_n == 1 && parameters.y_ign_n == 1) {
 	// 	parameters.x_ign_min = parameters.x_ign_max;
 	// 	parameters.y_ign_min = parameters.y_ign_max;
 	// }
 
 	/* Simulation ID */
-  strftime (buff, 15, "%Y%m%d%H%M%S", localtime (&now));
+	strftime(buff, 16, "%Y%m%d%H%M%S", localtime (&now));
+	strcat(buff, parameters.exp_id);
 	parameters.sim_id = (const char*) buff;	
 
 	/* Create simulation directory */

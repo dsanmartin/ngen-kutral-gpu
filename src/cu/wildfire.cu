@@ -6,7 +6,7 @@
 #include "../c/include/files.h"
 #include "../c/include/utils.h"
 
-#define DB 256 // Threads per block
+#define DB 512 // Threads per block
 #define DG(size) (size + DB - 1) / DB // Blocks per grid
 
 __constant__ double buffer[256];
@@ -147,7 +147,8 @@ __global__ void simulationBlock(Parameters parameters, DiffMats DM, double *Y, d
 __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-  if (tId < n_sim * parameters.M * parameters.N) {
+  //if (tId < n_sim * parameters.M * parameters.N) {
+	while (tId < n_sim * parameters.M * parameters.N) {
 		int sim = tId / (parameters.M * parameters.N);
 		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
 		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
@@ -170,7 +171,8 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *
 		/* Update values using Euler method */
     Y[gindex] = u_old + dt * u_new;
 		Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
-  }
+		tId += gridDim.x * blockDim.x;
+	}	
 }
 
 /*
@@ -460,7 +462,7 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 	}
 
 	/* To save IC */
-	char sim_name[40];
+	char sim_name[DIR_LEN + 32];
 
 	/* Temporal arrays */
 	double *d_tmp;
@@ -518,7 +520,7 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 
 void saveResults(Parameters parameters, double *h_sims) {
 	/* Simulation name */
-	char sim_name[40];
+	char sim_name[DIR_LEN + 32];
 
 	/* Temporal array */
 	double *h_tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
@@ -551,7 +553,7 @@ void saveResults(Parameters parameters, double *h_sims) {
 void wildfire(Parameters parameters) {
 
 	/* Log file with parameters info */
-	char log_name[100];
+	char log_name[DIR_LEN + 8];
 	sprintf(log_name, "%s/log.txt", parameters.dir);
 	FILE *log = fopen(log_name, "w");
 
@@ -624,7 +626,7 @@ void wildfire(Parameters parameters) {
 	cudaMalloc(&d_Dxx, parameters.N * parameters.N * sizeof(double));
 	cudaMalloc(&d_Dyy, parameters.M * parameters.M * sizeof(double));
 
-	/* Copy from host to device */
+	/* Copy from host to device  REVISAR (REMOVER COPIA)*/
 	cudaMemcpy(d_sims, h_sims, size * sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_x, h_x, parameters.N * sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_y, h_y, parameters.M * sizeof(double), cudaMemcpyHostToDevice);
@@ -657,6 +659,7 @@ void wildfire(Parameters parameters) {
 		// Spatial domain
 		printf("Chebyshev in space\n");
 		//fprintf(log, "Chebyshev in space\n");
+		/* REVISAR PARAMETROS M y N */
 
 		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_x, parameters.N - 1);
 		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_y, parameters.M - 1);
