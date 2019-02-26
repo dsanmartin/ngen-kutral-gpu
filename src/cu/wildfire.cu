@@ -80,15 +80,21 @@ __device__ double RHSU(Parameters parameters, DiffMats DM, double *Y, int i, int
 	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
 	
 	/* Compute derivatives */
-	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;
+	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
 	int m = parameters.M;
 	int n = parameters.N;
+	/*
 	for (int k = 0; k < parameters.N; k++) {
 		ux += Y[k * m + i] * DM.Dx[k * n + j];
 		uy += DM.Dy[k * m + i] * Y[j * m + k];
 		uxx += Y[k * m + i] * DM.Dxx[k * n + j];
 		uyy += DM.Dyy[k * m + i] * Y[j * m + k];
 	}
+	*/
+	ux = Y[(i-1) * m + i] * DM.Dx[(j-1) * n + j] + Y[(i+1) * m + i] * DM.Dx[(j+1) * n + j];
+	uy = DM.Dy[(i-1) * m + i] * Y[j * m + i - 1] + DM.Dy[(i + 1) * m + i] * Y[j * m + j + 1];
+	uxx = Y[(i-1) * m + i - 1] * DM.Dxx[(j - 1) * n + j - 1] + Y[i * m + i] * DM.Dxx[j * n + j] + Y[(i+1) * m + i + 1] * DM.Dxx[(j+1) * n + j+1];
+	uyy = DM.Dyy[(i-1) * m + (i-1)] * Y[(j-1) * m + j - 1] + DM.Dyy[i * m + i] * Y[j * m + j] + DM.Dyy[(i+1) * m + (i+1)] * Y[(j+1) * m + j + 1];
 
 	/* Compute PDE */
 	double diffusion = parameters.kappa * (uxx + uyy);
