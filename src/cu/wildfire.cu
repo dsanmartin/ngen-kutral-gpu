@@ -588,6 +588,7 @@ void wildfire(Parameters parameters) {
 	double *d_x, *d_y;
 
 	printf("Simulation ID: %s\n", parameters.sim_id);
+	printf("Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);
 
 	/* Write parameters in log */
 	fprintf(log, "Simulation ID: %s\n", parameters.sim_id);
@@ -700,7 +701,7 @@ void wildfire(Parameters parameters) {
 	DM.Dyy = d_Dyy;
 
 	/* Fill initial conditions */	
-	fillInitialConditions(parameters, d_sims, 1);
+	fillInitialConditions(parameters, d_sims, 0);
 
 	clock_t begin = clock();
 
@@ -716,7 +717,7 @@ void wildfire(Parameters parameters) {
 	cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
 
 	/* Save */
-	saveResults(parameters, h_sims);
+	//saveResults(parameters, h_sims);
 
 	/* Close log file */
 	fclose(log);
