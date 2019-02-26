@@ -16,6 +16,8 @@ struct _parameters {
 	double x_ign_max;
 	double y_ign_min;
 	double y_ign_max;
+	double dx;
+	double dy;
   int L;
   int M;
   int N;

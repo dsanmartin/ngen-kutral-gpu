@@ -7,7 +7,7 @@
 #include "../c/include/utils.h"
 
 #define DB 512 // Threads per block
-#define DG(size) (size + DB - 1) / DB // Blocks per grid
+#define DG(size) 64//(size + DB - 1) / DB // Blocks per grid
 
 __constant__ double buffer[256];
 
@@ -81,9 +81,9 @@ __device__ double RHSU(Parameters parameters, DiffMats DM, double *Y, int i, int
 	
 	/* Compute derivatives */
 	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
+	/*
 	int m = parameters.M;
 	int n = parameters.N;
-	/*
 	for (int k = 0; k < parameters.N; k++) {
 		ux += Y[k * m + i] * DM.Dx[k * n + j];
 		uy += DM.Dy[k * m + i] * Y[j * m + k];
@@ -91,10 +91,16 @@ __device__ double RHSU(Parameters parameters, DiffMats DM, double *Y, int i, int
 		uyy += DM.Dyy[k * m + i] * Y[j * m + k];
 	}
 	*/
+	/*
 	ux = Y[(i-1) * m + i] * DM.Dx[(j-1) * n + j] + Y[(i+1) * m + i] * DM.Dx[(j+1) * n + j];
 	uy = DM.Dy[(i-1) * m + i] * Y[j * m + i - 1] + DM.Dy[(i + 1) * m + i] * Y[j * m + j + 1];
 	uxx = Y[(i-1) * m + i - 1] * DM.Dxx[(j - 1) * n + j - 1] + Y[i * m + i] * DM.Dxx[j * n + j] + Y[(i+1) * m + i + 1] * DM.Dxx[(j+1) * n + j+1];
 	uyy = DM.Dyy[(i-1) * m + (i-1)] * Y[(j-1) * m + j - 1] + DM.Dyy[i * m + i] * Y[j * m + j] + DM.Dyy[(i+1) * m + (i+1)] * Y[(j+1) * m + j + 1];
+	*/
+	ux = (Y[(j+1) * parameters.M + i] - Y[(j-1) * parameters.M + i]) / (2 * parameters.dx);
+	uy = (Y[j * parameters.M + i + 1] - Y[j * parameters.M + i - 1]) / (2 * parameters.dy);
+	uxx = (Y[(j+1) * parameters.M + i] - 2 * u + Y[(j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
+	uyy = (Y[j * parameters.M + i + 1] - 2 * u + Y[j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
 
 	/* Compute PDE */
 	double diffusion = parameters.kappa * (uxx + uyy);
@@ -647,6 +653,9 @@ void wildfire(Parameters parameters) {
 		printf("Finite Difference in space\n");
 		printf("dx: %f\n", dx);
 		printf("dy: %f\n", dy);	
+
+		parameters.dx = dx;
+		parameters.dy = dy;
 
 		// fprintf(log, "Finite Difference in space\n");
 		// fprintf(log, "dx: %f\n", dx);
