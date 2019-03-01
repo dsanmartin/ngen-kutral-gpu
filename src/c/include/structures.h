@@ -23,6 +23,8 @@ struct _parameters {
   int N;
 	int x_ign_n;
 	int y_ign_n;
+	int threads;
+	int blocks;
 	const char *exp_id;
   const char *spatial;
   const char *time;

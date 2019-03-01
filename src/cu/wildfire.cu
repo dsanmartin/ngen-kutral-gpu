@@ -6,8 +6,8 @@
 #include "../c/include/files.h"
 #include "../c/include/utils.h"
 
-#define DB 512 // Threads per block
-#define DG(size) 64//(size + DB - 1) / DB // Blocks per grid
+#define DB parameters.threads// Threads per block
+#define DG(size) parameters.blocks//(size + DB - 1) / DB // Blocks per grid
 
 __constant__ double buffer[256];
 
@@ -701,7 +701,7 @@ void wildfire(Parameters parameters) {
 	DM.Dyy = d_Dyy;
 
 	/* Fill initial conditions */	
-	fillInitialConditions(parameters, d_sims, 0);
+	fillInitialConditions(parameters, d_sims, 1);
 
 	clock_t begin = clock();
 
@@ -713,11 +713,14 @@ void wildfire(Parameters parameters) {
 	printf("Execution time: %f [s]\n", time_spent);
 	fprintf(log, "\nExecution time: %f [s]\n", time_spent);
 
+	fprintf(log, "\nThreads per block: %d\n", DB);
+	fprintf(log, "Blocks per grid: %d\n", DG(1));
+
 	/* Copy approximations to host */
 	cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
 
 	/* Save */
-	//saveResults(parameters, h_sims);
+	saveResults(parameters, h_sims);
 
 	/* Close log file */
 	fclose(log);

@@ -1,2 +1,2 @@
 #!/bin/bash
-./bin/ngen-kutral FD Euler 128 128 500 1 1 block 0
+./bin/ngen-kutral FD Euler 128 128 500 1 1 all 0 512 64

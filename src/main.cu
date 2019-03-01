@@ -8,6 +8,9 @@
 #include "c/include/structures.h"
 #include "cu/include/wildfire.cuh"
 
+#define DB(t) t
+#define DG(b) b
+
 int main(int argc, char *argv[]) {
 	
 	/* Info for directory simulation */
@@ -48,6 +51,14 @@ int main(int argc, char *argv[]) {
 	parameters.y_ign_n = atoi(argv[7]);// Number of ignition points in y
 
 	parameters.exp_id = argv[9];
+
+	parameters.threads = atoi(argv[10]);
+	parameters.blocks = atoi(argv[11]);
+
+	printf("\nThreads per block: %d\n", parameters.threads);
+	printf("Blocks per grid: %d\n", parameters.blocks);
+
+
 	// if (parameters.x_ign_n == 1 && parameters.y_ign_n == 1) {
 	// 	parameters.x_ign_min = parameters.x_ign_max;
 	// 	parameters.y_ign_min = parameters.y_ign_max;
