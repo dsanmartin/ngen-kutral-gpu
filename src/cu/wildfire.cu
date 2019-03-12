@@ -115,6 +115,38 @@ __device__ double RHSB(Parameters parameters, double *Y, int i, int j) {
 	return g(parameters, u, b);
 }
 
+__device__ double RHSU2(Parameters parameters, DiffMats DM, double *Y, int i, int j) {
+	int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
+
+	/* Get actual value of approximations */
+	double u = Y[j * parameters.M + i];
+	double b = Y[j * parameters.M + i + offset];
+
+	/* Evaluate vector field */
+	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
+	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
+	
+	/* Compute derivatives */
+	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
+
+	ux = (Y[(j+1) * parameters.M + i] - Y[(j-1) * parameters.M + i]) / (2 * parameters.dx);
+	uy = (Y[j * parameters.M + i + 1] - Y[j * parameters.M + i - 1]) / (2 * parameters.dy);
+	uxx = (Y[(j+1) * parameters.M + i] - 2 * u + Y[(j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
+	uyy = (Y[j * parameters.M + i + 1] - 2 * u + Y[j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
+
+	/* Compute PDE */
+	double diffusion = parameters.kappa * (uxx + uyy);
+	double convection = v_v1 * ux + v_v2 * uy;
+	double reaction = f(parameters, u, b);
+	return diffusion - convection + reaction;
+}
+
+__device__ double RHSB2(Parameters parameters, double *Y, int i, int j) {
+	double u = Y[j * parameters.M + i];
+	double b = Y[j * parameters.M + i + parameters.M * parameters.N];
+	return g(parameters, u, b);
+}
+
 /*
 	Right hand side using Euler method.
 	This approach use all threads to compute each node of all simulations.
@@ -146,6 +178,39 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *
 		/* Update values using Euler method */
     Y[gindex] = u_old + dt * u_new;
 		Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
+		tId += gridDim.x * blockDim.x;
+	}	
+}
+
+__global__ void RHSEuler2(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
+	int offset = n_sim * parameters.M * parameters.N;
+	while (tId < offset) {
+		int sim = tId / (parameters.M * parameters.N);
+		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
+		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
+    double u_new = 0; // Boundary conditions
+		double b_new = 0; // Boundary conditions
+		//int offset = 2 * sim  * parameters.M * parameters.N;
+		//int gindex = offset + j * parameters.M + i;
+		int u_index = sim * parameters.M * parameters.N + j * parameters.M + i;
+		int b_index = offset + sim * parameters.M * parameters.N + j * parameters.M + i;
+
+		/* Get actual value of approximations */
+		double u_old = Y_old[u_index];
+		double b_old = Y_old[b_index];
+
+		/* PDE */
+    if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
+      double fuel = g(parameters, u_old, b_old);
+      u_new = RHSU2(parameters, DM, Y_old + sim * parameters.M * parameters.N, i, j);
+      b_new = fuel;
+		}
+
+		/* Update values using Euler method */
+    Y[u_index] = u_old + dt * u_new;
+		Y[b_index] = b_old + dt * b_new;
 		tId += gridDim.x * blockDim.x;
 	}	
 }
@@ -346,7 +411,8 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 		if (strcmp(parameters.approach, "all") == 0) {
 			for (int k = 1; k <= parameters.L; k++) { 
 				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
-				RHSEuler<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
+				//RHSEuler<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
+				RHSEuler2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
 			}
 		} else if (strcmp(parameters.approach, "block") == 0) {
 			for (int k = 1; k <= parameters.L; k++) { 
@@ -444,6 +510,8 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
 	double *d_tmp;
 	double *h_tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
 
+	int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
+
 	cudaMalloc(&d_tmp, parameters.M * parameters.N * sizeof(double));
 	cudaMemset(d_tmp, 0, parameters.M * parameters.N  * sizeof(double));
 	
@@ -458,12 +526,16 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
 
 			/* Compute initial condition for temperature */
 			U0<<<DG(parameters.M * parameters.N), DB>>>(parameters, d_tmp, x_ign, y_ign);
-			cudaMemcpy(d_sims + 2*sim_*parameters.M*parameters.N, 
+			//cudaMemcpy(d_sims + 2*sim_*parameters.M*parameters.N, 
+			//	d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(d_sims + sim_*parameters.M*parameters.N, 
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
 			/* Save temperature IC */
 			if (parameters.save) {
-				cudaMemcpy(h_tmp, d_sims + 2*sim_*parameters.M*parameters.N, 
+				// cudaMemcpy(h_tmp, d_sims + 2*sim_*parameters.M*parameters.N, 
+				// 	parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_tmp, d_sims + sim_*parameters.M*parameters.N, 
 					parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
 				sprintf(sim_name, "%s/%s0_%d%d.txt", parameters.dir, "U", i, j); // Simulation name
@@ -472,17 +544,21 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
 			
 			/* Compute initial condition for fuel */
 			B0<<<DG(parameters.M * parameters.N), DB>>>(parameters, d_tmp);
-			cudaMemcpy(d_sims + (2*sim_+1) * parameters.M * parameters.N, 
+			// cudaMemcpy(d_sims + (2*sim_+1) * parameters.M * parameters.N, 
+			// 	d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
+			cudaMemcpy(d_sims + offset + sim_ * parameters.M * parameters.N, 
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
 			/* Save fuel IC */
 			if (parameters.save) {
-				cudaMemcpy(h_tmp, d_sims + (2*sim_+1) * parameters.M * parameters.N, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
+				// cudaMemcpy(h_tmp, d_sims + (2*sim_+1) * parameters.M * parameters.N, 
+				// 	parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
+				cudaMemcpy(h_tmp, d_sims + offset + sim_ * parameters.M * parameters.N, 
+					parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
 				sprintf(sim_name, "%s/%s0_%d%d.txt", parameters.dir, "B", i, j); // Simulation name
 				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B0	 
 			}		
-
 			sim_++;		
 		}		
 	}
@@ -496,6 +572,8 @@ void saveResults(Parameters parameters, double *h_sims) {
 	/* Simulation name */
 	char sim_name[DIR_LEN + 32];
 
+	int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
+
 	/* Temporal array */
 	double *h_tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
 
@@ -504,19 +582,17 @@ void saveResults(Parameters parameters, double *h_sims) {
 		for (int j=0; j < parameters.x_ign_n; j++) {	
 
 			/* Temperature */
-			memcpy(h_tmp, h_sims + 2*sim_*parameters.M*parameters.N, 
-				parameters.M * parameters.N * sizeof(double));
+			// memcpy(h_tmp, h_sims + 2*sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
+			memcpy(h_tmp, h_sims + sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
 			memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
 			sprintf(sim_name, "%s/%s_%d%d.txt", parameters.dir, "U", i, j); // Simulation name
-			//sprintf(sim_name, "test/output/%s_%d%d.txt", "U", i, j); // Simulation name
 			saveApproximation(sim_name, h_tmp, parameters.M, parameters.N); // Save U
 
 			/* Fuel */
-			memcpy(h_tmp, h_sims + (2*sim_ + 1)*parameters.M*parameters.N, 
-				parameters.M * parameters.N * sizeof(double));
+			// memcpy(h_tmp, h_sims + (2*sim_ + 1)*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
+			memcpy(h_tmp, h_sims + offset + sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
 			memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
 			sprintf(sim_name, "%s/%s_%d%d.txt", parameters.dir,"B", i, j); // Simulation name
-			//sprintf(sim_name, "test/output/%s_%d%d.txt", "B", i, j); // Simulation name
 			saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B	
 
 			sim_++;
