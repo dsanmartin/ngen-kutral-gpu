@@ -55,6 +55,8 @@ int main(int argc, char *argv[]) {
 	parameters.threads = atoi(argv[10]);
 	parameters.blocks = atoi(argv[11]);
 
+	parameters.save = atoi(argv[12]);
+
 	printf("\nThreads per block: %d\n", parameters.threads);
 	printf("Blocks per grid: %d\n", parameters.blocks);
 

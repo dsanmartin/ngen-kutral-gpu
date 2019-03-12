@@ -115,46 +115,9 @@ __device__ double RHSB(Parameters parameters, double *Y, int i, int j) {
 	return g(parameters, u, b);
 }
 
-__global__ void simulationBlock(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
-	int sim = blockIdx.x;
-	int index = threadIdx.x;
-	int offset = 2 * sim  * parameters.M * parameters.N;
-	for (int k = 1; k <= parameters.L; k++) { 
-
-		for (int nodes = 0; nodes <= 2 * parameters.M * parameters.N; nodes++) 
-			Y_old[nodes] = Y[offset + nodes];
-
-		while (index < parameters.M * parameters.N) {
-			int i = index % parameters.M; // Row index
-			int j = index / parameters.M; // Col index
-			double u_new = 0; // Boundary conditions
-			double b_new = 0; // Boundary conditions
-			
-			int gindex = offset + j * parameters.M + i;
-
-			/* Get actual value of approximations */
-			double u_old = Y_old[gindex];
-			double b_old = Y_old[gindex + parameters.M * parameters.N];
-
-			/* PDE */
-			if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-				double fuel = g(parameters, u_old, b_old);
-				u_new = RHSU(parameters, DM, Y_old + offset, i, j);
-				b_new = fuel;
-			}
-			/* Update values using Euler method */
-			Y[gindex] = u_old + dt * u_new;
-			Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
-			index += blockDim.x;
-		}
-		__syncthreads();
-	}
-}
-
 /*
 	Right hand side using Euler method.
 	This approach use all threads to compute each node of all simulations.
-	Kernel time: 67.005ms 
 */
 __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
@@ -190,7 +153,6 @@ __global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *
 /*
 	Right hand side using Euler method.
 	This approach use each block for a single simulation.
-	Kernel time: 54.407ms 
 */
 __global__ void RHSEulerBlock(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
 	int sim = blockIdx.x;
@@ -222,8 +184,10 @@ __global__ void RHSEulerBlock(Parameters parameters, DiffMats DM, double *Y, dou
 
 __global__ void sumVector(Parameters parameters, double *c, double *a, double *b, double scalar, int size) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	if (tId < size) {
+	//if (tId < size) {
+	while (tId < size) {
 		c[tId] = a[tId] + scalar * b[tId];
+		tId += gridDim.x * blockDim.x;
 	}
 }
 
@@ -231,7 +195,7 @@ __global__ void sumVector(Parameters parameters, double *c, double *a, double *b
 __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *vec) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-	if (tId < n_sim * parameters.M * parameters.N) {
+	while (tId < n_sim * parameters.M * parameters.N) {
 		int sim = tId / (parameters.M * parameters.N);
 		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
 		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
@@ -248,6 +212,7 @@ __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *ve
 		}
 		k[u_index] = u_k;
 		k[b_index] = b_k;
+		tId += gridDim.x * blockDim.x;
 	}
 }
 
@@ -278,13 +243,13 @@ __global__ void RHSvecBlock(Parameters parameters, DiffMats DM, double *k, doubl
 /*
 	Right hand side using RK4 method.
 	This approach use all threads to compute each node of all simulations.
-	Kernel time: 1.8705ms 
 */
 __global__ void RHSRK4(Parameters parameters, DiffMats DM, double *Y, double *Y_old, 
 	double *k1, double *k2, double *k3, double *k4, double dt) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-  if (tId < n_sim * parameters.M * parameters.N) {
+  // if (tId < n_sim * parameters.M * parameters.N) {
+	while (tId < n_sim * parameters.M * parameters.N) {
 		int sim = tId / (parameters.M * parameters.N);
 		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
 		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
@@ -316,13 +281,13 @@ __global__ void RHSRK4(Parameters parameters, DiffMats DM, double *Y, double *Y_
 		/* Update values using RK4 method */
     Y[gindex] = u_old + (1.0 / 6.0) * dt * u_new;
 		Y[gindex + parameters.M * parameters.N] = b_old + (1.0 / 6.0) * dt * b_new;
+		tId += gridDim.x * blockDim.x;
   }
 }
 
 /*
 	Right hand side using RK4 method.
 	This approach use each block for a single simulation.
-	Kernel time: 2.642ms
 */
 __global__ void RHSRK4Block(Parameters parameters, DiffMats DM, double *Y, double *Y_old,
 	double *k1, double *k2, double *k3, double *k4, double dt) {
@@ -361,7 +326,6 @@ __global__ void RHSRK4Block(Parameters parameters, DiffMats DM, double *Y, doubl
 		Y[gindex + parameters.M * parameters.N] = b_old + (1.0 / 6.0) * dt * b_new;
 		index += blockDim.x;
 	}
-	__syncthreads();
 }
 
 void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
@@ -461,7 +425,7 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 	}
 }
 
-void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
+void fillInitialConditions(Parameters parameters, double *d_sims) {
 	/* Initial wildfire focus */
 	double dx_ign, dy_ign, x_ign, y_ign;
 
@@ -498,12 +462,11 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
 			/* Save temperature IC */
-			if (save) {
+			if (parameters.save) {
 				cudaMemcpy(h_tmp, d_sims + 2*sim_*parameters.M*parameters.N, 
 					parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
 				sprintf(sim_name, "%s/%s0_%d%d.txt", parameters.dir, "U", i, j); // Simulation name
-				//sprintf(sim_name, "test/output/%s0_%d%d.txt", "U", i, j); // Simulation name
 				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N); // Save U0
 			}
 			
@@ -513,11 +476,10 @@ void fillInitialConditions(Parameters parameters, double *d_sims, int save) {
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
 			/* Save fuel IC */
-			if (save) {
+			if (parameters.save) {
 				cudaMemcpy(h_tmp, d_sims + (2*sim_+1) * parameters.M * parameters.N, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
 				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
 				sprintf(sim_name, "%s/%s0_%d%d.txt", parameters.dir, "B", i, j); // Simulation name
-				//sprintf(sim_name, "test/output/%s0_%d%d.txt", "B", i, j); // Simulation name
 				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B0	 
 			}		
 
@@ -701,7 +663,7 @@ void wildfire(Parameters parameters) {
 	DM.Dyy = d_Dyy;
 
 	/* Fill initial conditions */	
-	fillInitialConditions(parameters, d_sims, 1);
+	fillInitialConditions(parameters, d_sims);
 
 	clock_t begin = clock();
 
@@ -720,8 +682,10 @@ void wildfire(Parameters parameters) {
 	cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
 
 	/* Save */
-	saveResults(parameters, h_sims);
-
+	if (parameters.save) {
+		saveResults(parameters, h_sims);
+	}
+	
 	/* Close log file */
 	fclose(log);
 

@@ -1,2 +1,2 @@
 #!/bin/bash
-rm test/output/*.txt
+rm -r test/output/*

@@ -25,6 +25,7 @@ struct _parameters {
 	int y_ign_n;
 	int threads;
 	int blocks;
+	int save;
 	const char *exp_id;
   const char *spatial;
   const char *time;
