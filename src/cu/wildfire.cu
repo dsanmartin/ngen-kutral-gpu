@@ -38,6 +38,10 @@ __device__ double s(double u, double upc) {
 	return u >= upc;
 }
 
+__device__ double p(Parameters parameters, double u, double b) {
+	return b * s(u, parameters.upc) * exp(u /(1 + parameters.epsilon * u));
+}
+
 __device__ double f(Parameters parameters, double u, double b) {
 	return s(u, parameters.upc) * b * exp(u / (1 + parameters.epsilon * u)) - parameters.alpha * u;
 }
