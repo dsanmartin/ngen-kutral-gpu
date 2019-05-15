@@ -139,6 +139,34 @@ __device__ double RHSU2(Parameters parameters, DiffMats DM, double *Y, int i, in
 	return diffusion - convection + reaction;
 }
 
+__device__ double RHSU3(Parameters parameters, DiffMats DM, double *Y, double *YT, int i, int j) {
+	int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
+
+	/* Get actual value of approximations */
+	double u = Y[j * parameters.M + i];
+	double b = Y[j * parameters.M + i + offset];
+
+	/* Evaluate vector field */
+	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
+	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
+	
+	/* Compute derivatives */
+	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
+
+	//ux = (Y[(j+1) * parameters.M + i] - Y[(j-1) * parameters.M + i]) / (2 * parameters.dx);
+	ux = (YT[(i+1) * parameters.M + j] - YT[(i-1) * parameters.M + i]) / (2 * parameters.dx);
+	uy = (Y[j * parameters.M + i + 1] - Y[j * parameters.M + i - 1]) / (2 * parameters.dy);
+	//uxx = (Y[(j+1) * parameters.M + i] - 2 * u + Y[(j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
+	uxx = (YT[(i+1) * parameters.M + j] - 2 * YT[i * parameters.M + j] + Y[(i-1) * parameters.M + j]) / (parameters.dx * parameters.dx);
+	uyy = (Y[j * parameters.M + i + 1] - 2 * u + Y[j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
+
+	/* Compute PDE */
+	double diffusion = parameters.kappa * (uxx + uyy);
+	double convection = v_v1 * ux + v_v2 * uy;
+	double reaction = f(parameters, u, b);
+	return diffusion - convection + reaction;
+}
+
 /*
 	Right hand side using Euler method.
 	This approach use all threads to compute each node of all simulations.
@@ -280,6 +308,39 @@ __global__ void RHSvec2(Parameters parameters, DiffMats DM, double *k, double *v
 	}
 }
 
+__global__ void RHSvec3(Parameters parameters, DiffMats DM, double *k, double *vec, double *vecT) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
+	int offset = n_sim * parameters.M * parameters.N;
+	while (tId < n_sim * parameters.M * parameters.N) {
+		int sim = tId / (parameters.M * parameters.N);
+		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
+		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
+		int u_index = sim * parameters.M * parameters.N + j * parameters.M + i;
+		int b_index = offset + sim * parameters.M * parameters.N + j * parameters.M + i;
+
+		double u_k = 0;
+		double b_k = 0;
+		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
+			u_k = RHSU3(parameters, DM, vec + sim * parameters.M * parameters.N, vecT + sim * parameters.M * parameters.N, i, j);
+			b_k = g(parameters, vec[u_index], vec[b_index]);
+		}
+		k[u_index] = u_k;
+		k[b_index] = b_k;
+		tId += gridDim.x * blockDim.x;
+	}
+}
+
+__global__ void transpose(double *src, double *dst, int size, int m, int n) {
+	int idx = threadIdx.x + blockDim.x * blockIdx.x;
+	while (idx < size) {
+		unsigned int i = idx % m;
+		unsigned int j = idx / m;
+		dst[n * i + j] = src[m * j + i];
+		idx += gridDim.x * blockDim.x;
+	}
+}
+
 /*
 	Right hand side using RK4 method.
 	This approach use all threads to compute each node of all simulations.
@@ -381,15 +442,19 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 
 		/* Temporal array for previous time step */
 		double *d_Y_tmp;
+		double *d_YT;
 		cudaMalloc(&d_Y_tmp, size * sizeof(double));
+		cudaMalloc(&d_YT, size * sizeof(double));
 
 		/* GPU parallel approach */
 		if (strcmp(parameters.approach, "all") == 0) {
 			for (int k = 1; k <= parameters.L; k++) { 
 				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
 				//RHSEuler<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
-				// RHSEuler2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
+				//RHSEuler2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
 				RHSvec2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp); 
+				//transpose<<<DG(size), DB>>>(d_Y, d_YT, size, parameters.M, parameters.N); 
+				//RHSvec3<<<DG(size), DB>>>(parameters, DM, d_Y, d_YT, d_Y_tmp); 
 				EulerScheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_Y, dt, size); 
 			}
 		} 

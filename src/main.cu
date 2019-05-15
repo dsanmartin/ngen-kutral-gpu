@@ -76,8 +76,8 @@ int main(int argc, char *argv[]) {
 	if (stat(directory, &st) == -1) {
 		mkdir(directory, 0700);
 		parameters.dir = (const char*) directory;
-	}
-
+	} 
+	
 	/* Simulations */
 	wildfire(parameters);
 
