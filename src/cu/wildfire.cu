@@ -26,6 +26,7 @@ __device__ double b0(double x, double y) {
 	return 1;
 }
 
+/* Vector field components */
 __device__ double v1(double x, double y) {
 	return 0.70710678118;
 }
@@ -139,102 +140,6 @@ __device__ double RHSU2(Parameters parameters, DiffMats DM, double *Y, int i, in
 	return diffusion - convection + reaction;
 }
 
-__device__ double RHSU3(Parameters parameters, DiffMats DM, double *Y, double *YT, int i, int j) {
-	int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
-
-	/* Get actual value of approximations */
-	double u = Y[j * parameters.M + i];
-	double b = Y[j * parameters.M + i + offset];
-
-	/* Evaluate vector field */
-	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-	
-	/* Compute derivatives */
-	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
-
-	//ux = (Y[(j+1) * parameters.M + i] - Y[(j-1) * parameters.M + i]) / (2 * parameters.dx);
-	ux = (YT[(i+1) * parameters.M + j] - YT[(i-1) * parameters.M + i]) / (2 * parameters.dx);
-	uy = (Y[j * parameters.M + i + 1] - Y[j * parameters.M + i - 1]) / (2 * parameters.dy);
-	//uxx = (Y[(j+1) * parameters.M + i] - 2 * u + Y[(j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
-	uxx = (YT[(i+1) * parameters.M + j] - 2 * YT[i * parameters.M + j] + Y[(i-1) * parameters.M + j]) / (parameters.dx * parameters.dx);
-	uyy = (Y[j * parameters.M + i + 1] - 2 * u + Y[j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
-
-	/* Compute PDE */
-	double diffusion = parameters.kappa * (uxx + uyy);
-	double convection = v_v1 * ux + v_v2 * uy;
-	double reaction = f(parameters, u, b);
-	return diffusion - convection + reaction;
-}
-
-/*
-	Right hand side using Euler method.
-	This approach use all threads to compute each node of all simulations.
-*/
-__global__ void RHSEuler(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-  //if (tId < n_sim * parameters.M * parameters.N) {
-	while (tId < n_sim * parameters.M * parameters.N) {
-		int sim = tId / (parameters.M * parameters.N);
-		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
-		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
-		double u_new = 0; // Boundary conditions
-		double b_new = 0; // Boundary conditions
-		int offset = 2 * sim  * parameters.M * parameters.N;
-		int gindex = offset + j * parameters.M + i;
-
-		/* Get actual value of approximations */
-		double u_old = Y_old[gindex];
-		double b_old = Y_old[gindex + parameters.M * parameters.N];
-
-		/* PDE */
-		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-			double fuel = g(parameters, u_old, b_old);
-			u_new = RHSU(parameters, DM, Y_old + offset, i, j);
-			b_new = fuel;
-		}
-
-		/* Update values using Euler method */
-		Y[gindex] = u_old + dt * u_new;
-		Y[gindex + parameters.M * parameters.N] = b_old + dt * b_new;
-		tId += gridDim.x * blockDim.x;
-	}	
-}
-
-__global__ void RHSEuler2(Parameters parameters, DiffMats DM, double *Y, double *Y_old, double dt) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-	int offset = n_sim * parameters.M * parameters.N;
-	while (tId < offset) {
-		int sim = tId / (parameters.M * parameters.N);
-		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
-		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
-		double u_new = 0; // Boundary conditions
-		double b_new = 0; // Boundary conditions
-		//int offset = 2 * sim  * parameters.M * parameters.N;
-		//int gindex = offset + j * parameters.M + i;
-		int u_index = sim * parameters.M * parameters.N + j * parameters.M + i;
-		int b_index = offset + sim * parameters.M * parameters.N + j * parameters.M + i;
-
-		/* Get actual value of approximations */
-		double u_old = Y_old[u_index];
-		double b_old = Y_old[b_index];
-
-		/* PDE */
-		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-			double fuel = g(parameters, u_old, b_old);
-			u_new = RHSU2(parameters, DM, Y_old + sim * parameters.M * parameters.N, i, j);
-			b_new = fuel;
-		}
-
-		/* Update values using Euler method */
-		Y[u_index] = u_old + dt * u_new;
-		Y[b_index] = b_old + dt * b_new;
-		tId += gridDim.x * blockDim.x;
-	}	
-}
-
 __global__ void sumVector(Parameters parameters, double *c, double *a, double *b, double scalar, int size) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	while (tId < size) {
@@ -260,7 +165,6 @@ __global__ void RK4Scheme(Parameters parameters, double *Y_new, double *Y_old, d
 	}
 }
 
-/* Compute RHS using all threads 43.5ms */
 __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *vec) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
@@ -299,134 +203,50 @@ __global__ void RHSvec2(Parameters parameters, DiffMats DM, double *k, double *v
 		double u_k = 0;
 		double b_k = 0;
 		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			u_k = RHSU2(parameters, DM, vec + sim * parameters.M * parameters.N, i, j);
+			//u_k = RHSU2(parameters, DM, vec + sim * parameters.M * parameters.N, i, j);
+
+			int offset2 = sim * parameters.M * parameters.N;
+
+			/* Get actual value of approximations */
+			double u = vec[u_index];
+			double b = vec[b_index];
+
+			/* Evaluate vector field */
+			double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
+			double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
+			
+			/* Compute derivatives */
+			double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
+
+			double u_r = vec[offset2 + (j+1) * parameters.M + i];
+			double u_l = vec[offset2 + (j-1) * parameters.M + i];
+			double u_u = vec[offset2 + j * parameters.M + i + 1];
+			double u_d = vec[offset2 + j * parameters.M + i - 1];
+
+			/*
+			ux = (vec[offset2 + (j+1) * parameters.M + i] - vec[offset2 + (j-1) * parameters.M + i]) / (2 * parameters.dx);
+			uy = (vec[offset2 + j * parameters.M + i + 1] - vec[offset2 + j * parameters.M + i - 1]) / (2 * parameters.dy);
+			uxx = (vec[offset2 + (j+1) * parameters.M + i] - 2 * u + vec[offset2 + (j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
+			uyy = (vec[offset2 + j * parameters.M + i + 1] - 2 * u + vec[offset2 + j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
+			*/
+			ux = (u_r - u_l) / (2 * parameters.dx);
+			uy = (u_u - u_d) / (2 * parameters.dy);
+			uxx = (u_r - 2 * u + u_l) / (parameters.dx * parameters.dx);
+			uyy = (u_u - 2 * u + u_d) / (parameters.dy * parameters.dy);
+
+			/* Compute PDE */
+			double diffusion = parameters.kappa * (uxx + uyy);
+			double convection = v_v1 * ux + v_v2 * uy;
+			double reaction = f(parameters, u, b);
+			u_k = diffusion - convection + reaction;
+
 			b_k = g(parameters, vec[u_index], vec[b_index]);
 		}
+
 		k[u_index] = u_k;
 		k[b_index] = b_k;
 		tId += gridDim.x * blockDim.x;
 	}
-}
-
-__global__ void RHSvec3(Parameters parameters, DiffMats DM, double *k, double *vec, double *vecT) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-	int offset = n_sim * parameters.M * parameters.N;
-	while (tId < n_sim * parameters.M * parameters.N) {
-		int sim = tId / (parameters.M * parameters.N);
-		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
-		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
-		int u_index = sim * parameters.M * parameters.N + j * parameters.M + i;
-		int b_index = offset + sim * parameters.M * parameters.N + j * parameters.M + i;
-
-		double u_k = 0;
-		double b_k = 0;
-		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			u_k = RHSU3(parameters, DM, vec + sim * parameters.M * parameters.N, vecT + sim * parameters.M * parameters.N, i, j);
-			b_k = g(parameters, vec[u_index], vec[b_index]);
-		}
-		k[u_index] = u_k;
-		k[b_index] = b_k;
-		tId += gridDim.x * blockDim.x;
-	}
-}
-
-__global__ void transpose(double *src, double *dst, int size, int m, int n) {
-	int idx = threadIdx.x + blockDim.x * blockIdx.x;
-	while (idx < size) {
-		unsigned int i = idx % m;
-		unsigned int j = idx / m;
-		dst[n * i + j] = src[m * j + i];
-		idx += gridDim.x * blockDim.x;
-	}
-}
-
-/*
-	Right hand side using RK4 method.
-	This approach use all threads to compute each node of all simulations.
-*/
-__global__ void RHSRK4(Parameters parameters, DiffMats DM, double *Y, double *Y_old, 
-	double *k1, double *k2, double *k3, double *k4, double dt) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-  // if (tId < n_sim * parameters.M * parameters.N) {
-	while (tId < n_sim * parameters.M * parameters.N) {
-		int sim = tId / (parameters.M * parameters.N);
-		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
-		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
-		double u_new = 0; // Boundary conditions
-		double b_new = 0; // Boundary conditions
-		int offset = 2 * sim  * parameters.M * parameters.N;
-		int gindex = offset + j * parameters.M + i;
-
-		/* Get actual value of approximations */
-		double u_old = Y_old[gindex];
-		double b_old = Y_old[gindex + parameters.M * parameters.N];
-		double u_k1 = 0, u_k2 = 0, u_k3 = 0, u_k4 = 0;
-		double b_k1 = 0, b_k2 = 0, b_k3 = 0, b_k4 = 0; 
-
-		/* PDE */
-		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-			u_k1 = k1[gindex];
-			u_k2 = k2[gindex];
-			u_k3 = k3[gindex];
-			u_k4 = k4[gindex];
-			b_k1 = k1[gindex + parameters.M * parameters.N];
-			b_k2 = k2[gindex + parameters.M * parameters.N];
-			b_k3 = k3[gindex + parameters.M * parameters.N];
-			b_k4 = k4[gindex + parameters.M * parameters.N];
-			u_new = u_k1 + 2 * u_k2 + 2 * u_k3 + u_k4;
-			b_new = b_k1 + 2 * b_k2 + 2 * b_k3 + b_k4;
-		}
-
-		/* Update values using RK4 method */
-		Y[gindex] = u_old + (1.0 / 6.0) * dt * u_new;
-		Y[gindex + parameters.M * parameters.N] = b_old + (1.0 / 6.0) * dt * b_new;
-		tId += gridDim.x * blockDim.x;
-  }
-}
-
-__global__ void RHSRK42(Parameters parameters, DiffMats DM, double *Y, double *Y_old, 
-	double *k1, double *k2, double *k3, double *k4, double dt) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
-	int offset = n_sim * parameters.M * parameters.N;
-	while (tId < offset) {
-		int sim = tId / (parameters.M * parameters.N);
-		int i = (tId - sim * parameters.M * parameters.N) % parameters.M; // Row index
-		int j = (tId - sim * parameters.M * parameters.N) / parameters.M; // Col index
-		double u_new = 0; // Boundary conditions
-		double b_new = 0; // Boundary conditions
-		// int offset = 2 * sim  * parameters.M * parameters.N;
-		// int gindex = offset + j * parameters.M + i;
-		int u_index = sim * parameters.M * parameters.N + j * parameters.M + i;
-		int b_index = offset + sim * parameters.M * parameters.N + j * parameters.M + i;
-
-		/* Get actual value of approximations */
-		double u_old = Y_old[u_index];
-		double b_old = Y_old[b_index];
-		double u_k1 = 0, u_k2 = 0, u_k3 = 0, u_k4 = 0;
-		double b_k1 = 0, b_k2 = 0, b_k3 = 0, b_k4 = 0; 
-
-		/* PDE */
-		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) { // Inside domain
-			u_k1 = k1[u_index];
-			u_k2 = k2[u_index];
-			u_k3 = k3[u_index];
-			u_k4 = k4[u_index];
-			b_k1 = k1[b_index];
-			b_k2 = k2[b_index];
-			b_k3 = k3[b_index];
-			b_k4 = k4[b_index];
-			u_new = u_k1 + 2 * u_k2 + 2 * u_k3 + u_k4;
-			b_new = b_k1 + 2 * b_k2 + 2 * b_k3 + b_k4;
-		}
-
-		/* Update values using RK4 method */
-		Y[u_index] = u_old + (1.0 / 6.0) * dt * u_new;
-		Y[b_index] = b_old + (1.0 / 6.0) * dt * b_new;
-		tId += gridDim.x * blockDim.x;
-  }
 }
 
 
@@ -442,28 +262,13 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 
 		/* Temporal array for previous time step */
 		double *d_Y_tmp;
-		double *d_YT;
 		cudaMalloc(&d_Y_tmp, size * sizeof(double));
-		cudaMalloc(&d_YT, size * sizeof(double));
 
-		/* GPU parallel approach */
-		if (strcmp(parameters.approach, "all") == 0) {
-			for (int k = 1; k <= parameters.L; k++) { 
-				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
-				//RHSEuler<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
-				//RHSEuler2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
-				RHSvec2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp); 
-				//transpose<<<DG(size), DB>>>(d_Y, d_YT, size, parameters.M, parameters.N); 
-				//RHSvec3<<<DG(size), DB>>>(parameters, DM, d_Y, d_YT, d_Y_tmp); 
-				EulerScheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_Y, dt, size); 
-			}
-		} 
-		// else if (strcmp(parameters.approach, "block") == 0) {
-		// 	for (int k = 1; k <= parameters.L; k++) { 
-		// 		cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
-		// 		//RHSEulerBlock<<<n_sim, DB>>>(parameters, DM, d_Y, d_Y_tmp, dt);
-		// 	}
-		// }
+		for (int k = 1; k <= parameters.L; k++) { 
+			cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
+			RHSvec2<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp); 
+			EulerScheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_Y, dt, size); 
+		}
 
 		cudaFree(d_Y_tmp);
 
@@ -487,54 +292,17 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 		cudaMemset(d_k4, 0, size * sizeof(double));
 		cudaMemset(d_ktmp, 0, size * sizeof(double));
 
-		/* GPU parallel approach */
-		if (strcmp(parameters.approach, "all") == 0) {
-			for (int k = 1; k <= parameters.L; k++) { 
-				cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice); // Y_{t-1}
-				// RHSvec<<<DG(size), DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
-				// sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
-				// RHSvec<<<DG(size), DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
-				// sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
-				// RHSvec<<<DG(size), DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
-				// sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
-				// RHSvec<<<DG(size), DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
-				// RHSRK4<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt); // RK4
-				RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
-				sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
-				RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
-				sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
-				RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
-				sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
-				RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
-				//RHSRK42<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt); // RK4
-				RK4Scheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt, size);
-			}
-		} 
-		// else if (strcmp(parameters.approach, "block") == 0) {
-		// 	for (int k = 1; k <= parameters.L; k++) { 
-		// 		cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice); // Y_{t-1}
-		// 		//RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
-		// 		//RHSvec<<<DG(size), DB>>>(parameters, DM, d_k1, d_Y_tmp);
-		// 		cudaDeviceSynchronize();
-		// 		sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
-		// 		//cudaDeviceSynchronize();
-		// 		RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
-		// 		//RHSvec<<<DG(size), DB>>>(parameters, DM, d_k2, d_ktmp);
-		// 		cudaDeviceSynchronize();
-		// 		sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
-		// 		//cudaDeviceSynchronize();
-		// 		RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
-		// 		//RHSvec<<<DG(size), DB>>>(parameters, DM, d_k3, d_ktmp);
-		// 		cudaDeviceSynchronize();
-		// 		sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
-		// 		//cudaDeviceSynchronize();
-		// 		RHSvecBlock<<<n_sim, DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
-		// 		//RHSvec<<<DG(size), DB>>>(parameters, DM, d_k4, d_ktmp);
-		// 		cudaDeviceSynchronize();
-		// 		RHSRK4Block<<<n_sim, DB>>>(parameters, DM, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt); // RK4
-		// 		//cudaDeviceSynchronize();
-		// 	}
-		// }
+		for (int k = 1; k <= parameters.L; k++) { 
+			cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice); // Y_{t-1}
+			RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
+			sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
+			RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
+			sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
+			RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
+			sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
+			RHSvec2<<<DG(size), DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
+			RK4Scheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt, size);
+		}
 
 		cudaFree(d_Y_tmp);
 		cudaFree(d_k1);
@@ -656,6 +424,11 @@ void saveResults(Parameters parameters, double *h_sims) {
 
 void wildfire(Parameters parameters) {
 
+	float milliseconds;
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
 	/* Log file with parameters info */
 	char log_name[DIR_LEN + 8];
 	sprintf(log_name, "%s/log.txt", parameters.dir);
@@ -731,15 +504,6 @@ void wildfire(Parameters parameters) {
 	cudaMalloc(&d_Dxx, parameters.N * parameters.N * sizeof(double));
 	cudaMalloc(&d_Dyy, parameters.M * parameters.M * sizeof(double));
 
-	/* Copy from host to device  REVISAR (REMOVER COPIA) 
-	cudaMemcpy(d_sims, h_sims, size * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_x, h_x, parameters.N * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_y, h_y, parameters.M * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Dx, h_Dx, parameters.N * parameters.N * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Dy, h_Dy, parameters.M * parameters.M * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Dxx, h_Dxx, parameters.N * parameters.N * sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Dyy, h_Dyy, parameters.M * parameters.M * sizeof(double), cudaMemcpyHostToDevice);
-	*/
 
 	/* Fill spatial domain and differentiation matrices */
 	if (strcmp(parameters.spatial, "FD") == 0) {		
@@ -798,8 +562,16 @@ void wildfire(Parameters parameters) {
 
 	clock_t begin = clock();
 
+	cudaEventRecord(start);
+
 	/* ODE Integration */
 	ODESolver(parameters, DM, d_sims, dt);
+
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+	milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+	printf("Execution CUDA: %.16f\n", milliseconds*1e-3);
 
 	clock_t end = clock();
 	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
