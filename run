@@ -1,2 +1,2 @@
 #!/bin/bash
-./bin/ngen-kutral FD Euler 128 128 500 10 10 all 0 512 64 1
+./bin/ngen-kutral FD RK4 128 128 100 10 10 all 0 512 64 1

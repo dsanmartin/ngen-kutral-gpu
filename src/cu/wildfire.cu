@@ -35,22 +35,7 @@ __device__ double v2(double x, double y) {
 	return 0.70710678118;
 }
 
-__device__ double s(double u, double upc) {
-	return u >= upc;
-}
-
-__device__ double p(Parameters parameters, double u, double b) {
-	return b * s(u, parameters.upc) * exp(u /(1 + parameters.epsilon * u));
-}
-
-__device__ double f(Parameters parameters, double u, double b) {
-	return s(u, parameters.upc) * b * exp(u / (1 + parameters.epsilon * u)) - parameters.alpha * u;
-}
-
-__device__ double g(Parameters parameters, double u, double b) {
-	return -s(u, parameters.upc) * (parameters.epsilon / parameters.q) * b * exp(u /(1 + parameters.epsilon * u));
-}
-
+/* Temprature IC */
 __global__ void U0(Parameters parameters, double *U, double x_ign, double y_ign) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tId < parameters.N * parameters.M) {
@@ -63,6 +48,7 @@ __global__ void U0(Parameters parameters, double *U, double x_ign, double y_ign)
 	}
 }
 
+/* Fuel IC */
 __global__ void B0(Parameters parameters, double *B) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tId < parameters.N * parameters.M) {
@@ -75,96 +61,7 @@ __global__ void B0(Parameters parameters, double *B) {
 	}
 }
 
-__device__ double RHSU(Parameters parameters, DiffMats DM, double *Y, int i, int j) {
-	/* Get actual value of approximations */
-	double u = Y[j * parameters.M + i];
-	double b = Y[j * parameters.M + i + parameters.M * parameters.N];
-
-	/* Evaluate vector field */
-	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-	
-	/* Compute derivatives */
-	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
-	/*
-	int m = parameters.M;
-	int n = parameters.N;
-	for (int k = 0; k < parameters.N; k++) {
-		ux += Y[k * m + i] * DM.Dx[k * n + j];
-		uy += DM.Dy[k * m + i] * Y[j * m + k];
-		uxx += Y[k * m + i] * DM.Dxx[k * n + j];
-		uyy += DM.Dyy[k * m + i] * Y[j * m + k];
-	}
-	*/
-	/*
-	ux = Y[(i-1) * m + i] * DM.Dx[(j-1) * n + j] + Y[(i+1) * m + i] * DM.Dx[(j+1) * n + j];
-	uy = DM.Dy[(i-1) * m + i] * Y[j * m + i - 1] + DM.Dy[(i + 1) * m + i] * Y[j * m + j + 1];
-	uxx = Y[(i-1) * m + i - 1] * DM.Dxx[(j - 1) * n + j - 1] + Y[i * m + i] * DM.Dxx[j * n + j] + Y[(i+1) * m + i + 1] * DM.Dxx[(j+1) * n + j+1];
-	uyy = DM.Dyy[(i-1) * m + (i-1)] * Y[(j-1) * m + j - 1] + DM.Dyy[i * m + i] * Y[j * m + j] + DM.Dyy[(i+1) * m + (i+1)] * Y[(j+1) * m + j + 1];
-	*/
-	ux = (Y[(j+1) * parameters.M + i] - Y[(j-1) * parameters.M + i]) / (2 * parameters.dx);
-	uy = (Y[j * parameters.M + i + 1] - Y[j * parameters.M + i - 1]) / (2 * parameters.dy);
-	uxx = (Y[(j+1) * parameters.M + i] - 2 * u + Y[(j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
-	uyy = (Y[j * parameters.M + i + 1] - 2 * u + Y[j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
-
-	/* Compute PDE */
-	double diffusion = parameters.kappa * (uxx + uyy);
-	double convection = v_v1 * ux + v_v2 * uy;
-	double reaction = f(parameters, u, b);
-	return diffusion - convection + reaction;
-}
-
-__device__ double RHSU2(Parameters parameters, DiffMats DM, double *Y, int i, int j) {
-	int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
-
-	/* Get actual value of approximations */
-	double u = Y[j * parameters.M + i];
-	double b = Y[j * parameters.M + i + offset];
-
-	/* Evaluate vector field */
-	double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
-	double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
-	
-	/* Compute derivatives */
-	double ux = 0.0, uy = 0.0, uxx = 0.0, uyy = 0.0;	
-
-	ux = (Y[(j+1) * parameters.M + i] - Y[(j-1) * parameters.M + i]) / (2 * parameters.dx);
-	uy = (Y[j * parameters.M + i + 1] - Y[j * parameters.M + i - 1]) / (2 * parameters.dy);
-	uxx = (Y[(j+1) * parameters.M + i] - 2 * u + Y[(j-1) * parameters.M + i]) / (parameters.dx * parameters.dx);
-	uyy = (Y[j * parameters.M + i + 1] - 2 * u + Y[j * parameters.M + i - 1]) / (parameters.dy * parameters.dy);
-
-	/* Compute PDE */
-	double diffusion = parameters.kappa * (uxx + uyy);
-	double convection = v_v1 * ux + v_v2 * uy;
-	double reaction = f(parameters, u, b);
-	return diffusion - convection + reaction;
-}
-
-__global__ void sumVector(Parameters parameters, double *c, double *a, double *b, double scalar, int size) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	while (tId < size) {
-		c[tId] = a[tId] + scalar * b[tId];
-		tId += gridDim.x * blockDim.x;
-	}
-}
-
-__global__ void EulerScheme(Parameters parameters, double *Y_new, double *Y_old, double *F, double dt, int size) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	while (tId < size) {
-		Y_new[tId] = Y_old[tId] + dt * F[tId];
-		tId += gridDim.x * blockDim.x;
-	}
-}
-
-__global__ void RK4Scheme(Parameters parameters, double *Y_new, double *Y_old, double *k1,  
-	double *k2, double *k3, double *k4, double dt, int size) {
-	int tId = threadIdx.x + blockIdx.x * blockDim.x;
-	while (tId < size) {
-		Y_new[tId] = Y_old[tId] + (1.0 / 6.0) * dt * (k1[tId] + 2 * k2[tId] + 2 * k3[tId] + k4[tId]);
-		tId += gridDim.x * blockDim.x;
-	}
-}
-
+/* PDE RHS computation */
 __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *vec) {
 	int tId = threadIdx.x + blockIdx.x * blockDim.x;
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n;
@@ -180,7 +77,6 @@ __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *ve
 		double u_k = 0;
 		double b_k = 0;
 		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			//u_k = RHSU(parameters, DM, vec + offset, i, j);
 
 			/* Get actual value of approximations */
 			double u = vec[u_index];
@@ -202,15 +98,15 @@ __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *ve
 			double uxx = (u_r - 2 * u + u_l) / (parameters.dx * parameters.dx);
 			double uyy = (u_u - 2 * u + u_d) / (parameters.dy * parameters.dy);
 			
-			/* Compute PDE */
+			/* Compute temperature terms*/
 			double diffusion = parameters.kappa * (uxx + uyy);
 			double convection = v_v1 * ux + v_v2 * uy;
-			// double s = (u >= parameters.upc);
 			double p = (u >= parameters.upc) * b * exp(u /(1 + parameters.epsilon * u));
-			double reaction = p - parameters.alpha * u;//s * b * exp(u / (1 + parameters.epsilon * u)) - parameters.alpha * u;//f(parameters, u, b);
-			u_k = diffusion - convection + reaction;
+			double reaction = p - parameters.alpha * u;
 
-			b_k = - (parameters.epsilon / parameters.q) * p;// -s * (parameters.epsilon / parameters.q) * b * exp(u /(1 + parameters.epsilon * u));//g(parameters, u, b);
+			/* Compute PDE RHS */
+			u_k = diffusion - convection + reaction;
+			b_k = - (parameters.epsilon / parameters.q) * p;
 		}
 
 		k[u_index] = u_k;
@@ -233,8 +129,6 @@ __global__ void RHSvec2(Parameters parameters, DiffMats DM, double *k, double *v
 		double u_k = 0;
 		double b_k = 0;
 		if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
-			//u_k = RHSU2(parameters, DM, vec + sim * parameters.M * parameters.N, i, j);
-
 			int offset2 = sim * parameters.M * parameters.N;
 
 			/* Get actual value of approximations */
@@ -257,13 +151,15 @@ __global__ void RHSvec2(Parameters parameters, DiffMats DM, double *k, double *v
 			double uxx = (u_r - 2 * u + u_l) / (parameters.dx * parameters.dx);
 			double uyy = (u_u - 2 * u + u_d) / (parameters.dy * parameters.dy);
 
-			/* Compute PDE */
+			/* Compute temperature terms */
 			double diffusion = parameters.kappa * (uxx + uyy);
 			double convection = v_v1 * ux + v_v2 * uy;
-			double reaction = f(parameters, u, b);
-			u_k = diffusion - convection + reaction;
+			double p = (u >= parameters.upc) * b * exp(u /(1 + parameters.epsilon * u));
+			double reaction = p - parameters.alpha * u;
 
-			b_k = g(parameters, u, b);
+			/* Compute PDE RHS */
+			u_k = diffusion - convection + reaction;
+			b_k = - (parameters.epsilon / parameters.q) * p;
 		}
 
 		k[u_index] = u_k;
@@ -272,6 +168,35 @@ __global__ void RHSvec2(Parameters parameters, DiffMats DM, double *k, double *v
 	}
 }
 
+/* Element-wise sum */
+__global__ void sumVector(Parameters parameters, double *c, double *a, double *b, double scalar, int size) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	while (tId < size) {
+		c[tId] = a[tId] + scalar * b[tId];
+		tId += gridDim.x * blockDim.x;
+	}
+}
+
+/* Euler scheme for integration */
+__global__ void EulerScheme(Parameters parameters, double *Y_new, double *Y_old, double *F, double dt, int size) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	while (tId < size) {
+		Y_new[tId] = Y_old[tId] + dt * F[tId];
+		tId += gridDim.x * blockDim.x;
+	}
+}
+
+/* Runge-Kutta 4th order scheme for integration */
+__global__ void RK4Scheme(Parameters parameters, double *Y_new, double *Y_old, double *k1,  
+	double *k2, double *k3, double *k4, double dt, int size) {
+	int tId = threadIdx.x + blockIdx.x * blockDim.x;
+	while (tId < size) {
+		Y_new[tId] = Y_old[tId] + (1.0 / 6.0) * dt * (k1[tId] + 2 * k2[tId] + 2 * k3[tId] + k4[tId]);
+		tId += gridDim.x * blockDim.x;
+	}
+}
+
+/* ODE solver for MOL */
 void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n; // Number of wildfire simulations
 	int size = 2 * n_sim * parameters.M * parameters.N;
