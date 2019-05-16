@@ -187,8 +187,8 @@ __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *ve
 			double b = vec[b_index];
 
 			/* Evaluate vector field */
-			double v_v1 = 0.70710678118;//v1(buffer[j], buffer[parameters.N + i]);
-			double v_v2 = 0.70710678118;//v2(buffer[j], buffer[parameters.N + i]);  
+			double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
+			double v_v2 = v2(buffer[j], buffer[parameters.N + i]);  
 			
 			/* Get stencil */
 			double u_r = vec[offset + (j+1) * parameters.M + i];
@@ -205,10 +205,12 @@ __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *ve
 			/* Compute PDE */
 			double diffusion = parameters.kappa * (uxx + uyy);
 			double convection = v_v1 * ux + v_v2 * uy;
-			double reaction = f(parameters, u, b);
+			// double s = (u >= parameters.upc);
+			double p = (u >= parameters.upc) * b * exp(u /(1 + parameters.epsilon * u));
+			double reaction = p - parameters.alpha * u;//s * b * exp(u / (1 + parameters.epsilon * u)) - parameters.alpha * u;//f(parameters, u, b);
 			u_k = diffusion - convection + reaction;
 
-			b_k = g(parameters, u, b);
+			b_k = - (parameters.epsilon / parameters.q) * p;// -s * (parameters.epsilon / parameters.q) * b * exp(u /(1 + parameters.epsilon * u));//g(parameters, u, b);
 		}
 
 		k[u_index] = u_k;
