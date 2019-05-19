@@ -1,2 +1,3 @@
 #!/bin/bash
-./bin/ngen-kutral FD Euler 128 128 500 10 10 all 0 512 64 1
+# Arguments: Spatial Time M N L x_ign_n y_ign_n threads blocks save_output exp_n
+./bin/ngen-kutral FD RK4 128 128 100 2 2 512 64 1 0

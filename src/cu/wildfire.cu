@@ -7,7 +7,7 @@
 #include "../c/include/utils.h"
 
 #define DB parameters.threads// Threads per block
-#define DG(size) parameters.blocks //(size + DB - 1) / DB // Blocks per grid 
+#define DG parameters.blocks // Blocks per grid 
 
 __constant__ double buffer[256];
 
@@ -213,8 +213,8 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 
 		for (int k = 1; k <= parameters.L; k++) { 
 			cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice);
-			RHSvec<<<DG(size), DB>>>(parameters, DM, d_Y, d_Y_tmp); 
-			EulerScheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_Y, dt, size); 
+			RHSvec<<<DG, DB>>>(parameters, DM, d_Y, d_Y_tmp); 
+			EulerScheme<<<DG, DB>>>(parameters, d_Y, d_Y_tmp, d_Y, dt, size); 
 		}
 
 		cudaFree(d_Y_tmp);
@@ -241,14 +241,14 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 
 		for (int k = 1; k <= parameters.L; k++) { 
 			cudaMemcpy(d_Y_tmp, d_Y, size * sizeof(double), cudaMemcpyDeviceToDevice); // Y_{t-1}
-			RHSvec<<<DG(size), DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
-			sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
-			RHSvec<<<DG(size), DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
-			sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
-			RHSvec<<<DG(size), DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
-			sumVector<<<DG(size), DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
-			RHSvec<<<DG(size), DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
-			RK4Scheme<<<DG(size), DB>>>(parameters, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt, size);
+			RHSvec<<<DG, DB>>>(parameters, DM, d_k1, d_Y_tmp); // Compute k1
+			sumVector<<<DG, DB>>>(parameters, d_ktmp, d_Y_tmp, d_k1, 0.5*dt, size); // Y_{t-1} + 0.5*dt*k1
+			RHSvec<<<DG, DB>>>(parameters, DM, d_k2, d_ktmp); // Compute k2
+			sumVector<<<DG, DB>>>(parameters, d_ktmp, d_Y_tmp, d_k2, 0.5 * dt, size); // Y_{t-1} + 0.5*dt*k2
+			RHSvec<<<DG, DB>>>(parameters, DM, d_k3, d_ktmp); // Compute k3
+			sumVector<<<DG, DB>>>(parameters, d_ktmp, d_Y_tmp, d_k3, dt, size); // Y_{t-1} + dt*k3
+			RHSvec<<<DG, DB>>>(parameters, DM, d_k4, d_ktmp); // Compute k4
+			RK4Scheme<<<DG, DB>>>(parameters, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt, size);
 		}
 
 		cudaFree(d_Y_tmp);
@@ -272,12 +272,9 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
 		dy_ign = 1;
 	}
 
-	/* To save IC */
-	char sim_name[DIR_LEN + 32];
 
 	/* Temporal arrays */
 	double *d_tmp;
-	double *h_tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
 
 	//int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
 
@@ -294,79 +291,26 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
 			y_ign = parameters.y_ign_min + dy_ign * i;
 
 			/* Compute initial condition for temperature */
-			U0<<<DG(parameters.M * parameters.N), DB>>>(parameters, d_tmp, x_ign, y_ign);
+			U0<<<DG, DB>>>(parameters, d_tmp, x_ign, y_ign);
 			cudaMemcpy(d_sims + 2*sim_*parameters.M*parameters.N, 
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			// cudaMemcpy(d_sims + sim_*parameters.M*parameters.N, 
 			// 	d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
-			/* Save temperature IC */
-			if (parameters.save) {
-				cudaMemcpy(h_tmp, d_sims + 2*sim_*parameters.M*parameters.N, 
-					parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
-				// cudaMemcpy(h_tmp, d_sims + sim_*parameters.M*parameters.N, 
-				// 	parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
-				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
-				sprintf(sim_name, "%s/%s0_%d%d.txt", parameters.dir, "U", i, j); // Simulation name
-				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N); // Save U0
-			}
 			
 			/* Compute initial condition for fuel */
-			B0<<<DG(parameters.M * parameters.N), DB>>>(parameters, d_tmp);
+			B0<<<DG, DB>>>(parameters, d_tmp);
 			cudaMemcpy(d_sims + (2*sim_+1) * parameters.M * parameters.N, 
 				d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			// cudaMemcpy(d_sims + offset + sim_ * parameters.M * parameters.N, 
 			// 	d_tmp, parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 			
-			/* Save fuel IC */
-			if (parameters.save) {
-				cudaMemcpy(h_tmp, d_sims + (2*sim_+1) * parameters.M * parameters.N, 
-					parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
-				// cudaMemcpy(h_tmp, d_sims + offset + sim_ * parameters.M * parameters.N, 
-				// 	parameters.M * parameters.N * sizeof(double), cudaMemcpyDeviceToHost);
-				memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
-				sprintf(sim_name, "%s/%s0_%d%d.txt", parameters.dir, "B", i, j); // Simulation name
-				saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B0	 
-			}		
 			sim_++;		
 		}		
 	}
 
 	/* Free memory */
 	cudaFree(d_tmp);
-	free(h_tmp);
-}
-
-void saveResults(Parameters parameters, double *h_sims) {
-	/* Simulation name */
-	char sim_name[DIR_LEN + 32];
-
-	//int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
-
-	/* Temporal array */
-	double *h_tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
-
-	int sim_ = 0;
-	for (int i=0; i < parameters.y_ign_n; i++) {
-		for (int j=0; j < parameters.x_ign_n; j++) {	
-
-			/* Temperature */
-			memcpy(h_tmp, h_sims + 2*sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
-			// memcpy(h_tmp, h_sims + sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
-			memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
-			sprintf(sim_name, "%s/%s_%d%d.txt", parameters.dir, "U", i, j); // Simulation name
-			saveApproximation(sim_name, h_tmp, parameters.M, parameters.N); // Save U
-
-			/* Fuel */
-			memcpy(h_tmp, h_sims + (2*sim_ + 1)*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
-			// memcpy(h_tmp, h_sims + offset + sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
-			memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
-			sprintf(sim_name, "%s/%s_%d%d.txt", parameters.dir,"B", i, j); // Simulation name
-			saveApproximation(sim_name, h_tmp, parameters.M, parameters.N);	// Save B	
-
-			sim_++;
-		}
-	}
 }
 
 void wildfire(Parameters parameters) {
@@ -375,11 +319,6 @@ void wildfire(Parameters parameters) {
 	cudaEvent_t start, stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
-
-	/* Log file with parameters info */
-	char log_name[DIR_LEN + 8];
-	sprintf(log_name, "%s/log.txt", parameters.dir);
-	FILE *log = fopen(log_name, "w");
 
 	/* Kernel Parameters */
 	int n_sim = parameters.x_ign_n * parameters.y_ign_n; // Number of wildfire simulations
@@ -400,33 +339,7 @@ void wildfire(Parameters parameters) {
 	double *d_x, *d_y;
 
 	printf("Simulation ID: %s\n", parameters.sim_id);
-	printf("Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);
-
-	/* Write parameters in log */
-	fprintf(log, "Simulation ID: %s\n", parameters.sim_id);
-	fprintf(log, "Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);
-	fprintf(log, "Parallel approach: %s\n", parameters.approach);
-	fprintf(log, "\nIgnition points\n");
-	fprintf(log, "----------------\n");
-	fprintf(log, "%d in x, %d in y\n", parameters.x_ign_n, parameters.y_ign_n);
-	fprintf(log, "Domain: [%f, %f]x[%f, %f]\n", parameters.x_ign_min, parameters.x_ign_max,
-	parameters.y_ign_min, parameters.y_ign_max);
-	fprintf(log, "\nSpace\n");
-	fprintf(log, "------\n");	
-	fprintf(log, "Domain: [%f, %f]x[%f, %f]\n", parameters.x_min, parameters.x_max, 
-		parameters.y_min, parameters.y_max);
-	fprintf(log, "Method: %s\n", parameters.spatial);
-	fprintf(log, "M: %d\n", parameters.M);
-	fprintf(log, "N: %d\n", parameters.N);
-	fprintf(log, "dx: %f\n", dx);
-	fprintf(log, "dy: %f\n", dy);
-	fprintf(log, "\nTime\n");
-	fprintf(log, "------\n");	
-	fprintf(log, "Domain: [0, %f]\n", parameters.t_max);
-	fprintf(log, "Method: %s\n", parameters.time);
-	fprintf(log, "L: %d\n", parameters.L);
-	fprintf(log, "dt: %f\n", dt);		
-	
+	printf("Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);	
 
 	/* Differentiation Matrices */
 	
@@ -462,18 +375,14 @@ void wildfire(Parameters parameters) {
 		parameters.dx = dx;
 		parameters.dy = dy;
 
-		// fprintf(log, "Finite Difference in space\n");
-		// fprintf(log, "dx: %f\n", dx);
-		// fprintf(log, "dy: %f\n", dy);	
-
-		fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_x, dx, parameters.N);
-		fillVectorKernel<<<DG(parameters.M * parameters.N), DB>>>(d_y, dy, parameters.M);
+		fillVectorKernel<<<DG, DB>>>(d_x, dx, parameters.N);
+		fillVectorKernel<<<DG, DB>>>(d_y, dy, parameters.M);
 
 		// Differentiation matrices
-		FD1Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dx, parameters.N, dx);
-		FD1Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dy, parameters.M, dy);
-		FD2Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dxx, parameters.N, dx);
-		FD2Kernel<<<DG(parameters.M * parameters.N), DB>>>(d_Dyy, parameters.M, dy);
+		FD1Kernel<<<DG, DB>>>(d_Dx, parameters.N, dx);
+		FD1Kernel<<<DG, DB>>>(d_Dy, parameters.M, dy);
+		FD2Kernel<<<DG, DB>>>(d_Dxx, parameters.N, dx);
+		FD2Kernel<<<DG, DB>>>(d_Dyy, parameters.M, dy);
 
 	} else if (strcmp(parameters.spatial, "Cheb") == 0) {
 		// Spatial domain
@@ -481,6 +390,7 @@ void wildfire(Parameters parameters) {
 		//fprintf(log, "Chebyshev in space\n");
 		/* REVISAR PARAMETROS M y N */
 
+		/*
 		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_x, parameters.N - 1);
 		ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_y, parameters.M - 1);
 
@@ -489,11 +399,13 @@ void wildfire(Parameters parameters) {
 		ChebyshevMatrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dy, d_y, parameters.M - 1);
 		Chebyshev2Matrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dxx, d_Dx, parameters.N - 1);
 		Chebyshev2Matrix<<<DG(parameters.M * parameters.N), DB>>>(d_Dyy, d_Dy, parameters.M - 1);
-
+		*/
 	} else {
 		printf("Spatial domain error\n");
 		exit(0);
 	}	
+
+	parameters.dt = dt;
 	
 	/* Copy spatial domain to constant memory */
 	cudaMemcpyToSymbol(buffer, d_x, parameters.N * sizeof(double), 0, cudaMemcpyDeviceToDevice);
@@ -506,6 +418,11 @@ void wildfire(Parameters parameters) {
 
 	/* Fill initial conditions */	
 	fillInitialConditions(parameters, d_sims);
+
+	if (parameters.save) {
+		cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
+		save(parameters, h_sims, 1);
+	}
 
 	clock_t begin = clock();
 
@@ -523,21 +440,16 @@ void wildfire(Parameters parameters) {
 	clock_t end = clock();
 	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
 	printf("Execution time: %f [s]\n", time_spent);
-	fprintf(log, "\nExecution time: %f [s]\n", time_spent);
 
-	fprintf(log, "\nThreads per block: %d\n", DB);
-	fprintf(log, "Blocks per grid: %d\n", DG(1));
+	logFile(parameters, time_spent);
 
 	/* Copy approximations to host */
 	cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
 
 	/* Save */
 	if (parameters.save) {
-		saveResults(parameters, h_sims);
+		save(parameters, h_sims, 0);
 	}
-	
-	/* Close log file */
-	fclose(log);
 
 	/* Memory free */
 	cudaFree(d_sims);
