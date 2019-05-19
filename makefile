@@ -66,7 +66,9 @@ OBJMAIN = $(patsubst $(SRC)%.cu,$(DEST)%.o,$(SRCMAIN))
 # The MAGIC
 #
 
-all: directories $(BIN)$(EXE) clean
+all: directories $(BIN)$(EXE)
+
+.PHONY: clean
 
 $(BIN)$(EXE): $(OBJC) $(OBJCPP) $(OBJCU) $(OBJMAIN)
 	$(NVCC) $(NVFLAGS) $^ -o $@
@@ -101,7 +103,7 @@ clean:
 	$(RM) -rf $(DEST)
 
 fresh:
-	$(RM) -rf outputs/*
+	$(RM) -rf test/output/*
 
 distclean: clean
 	$(RM) -rf $(BIN)*

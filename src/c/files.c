@@ -70,7 +70,7 @@ void readInput(const char *filename, double *A, int rows, int cols) {
   file = fopen(filename, "r");
   for(int i = 0; i < rows; i++) {
     for(int j = 0; j < cols; j++) {
-      if (!fscanf(file, "%.lf", &A[j * rows + i])) 
+      if (!fscanf(file, "%lf", &A[j * rows + i])) 
         break;
     }
   }
