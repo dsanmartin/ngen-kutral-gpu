@@ -262,16 +262,15 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
 
 void fillInitialConditions(Parameters parameters, double *d_sims) {
 	/* Initial wildfire focus */
-	double dx_ign, dy_ign, x_ign, y_ign;
+	double dx_ign = 0.0, dy_ign = 0.0, x_ign, y_ign;
 
-	if (parameters.x_ign_n * parameters.y_ign_n > 1) {
+	if (parameters.x_ign_n > 1) {
 		dx_ign = (parameters.x_ign_max - parameters.x_ign_min) / (parameters.x_ign_n - 1);
-		dy_ign = (parameters.y_ign_max - parameters.y_ign_min) / (parameters.y_ign_n - 1);	
-	} else {
-		dx_ign = 1;
-		dy_ign = 1;
 	}
-
+	
+	if (parameters.y_ign_n > 1) {
+		dy_ign = (parameters.y_ign_max - parameters.y_ign_min) / (parameters.y_ign_n - 1);
+	}
 
 	/* Temporal arrays */
 	double *d_tmp;
