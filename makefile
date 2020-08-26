@@ -12,7 +12,7 @@ EXE    = ngen-kutral
 # Executables
 #
 
-CC     = g++#gcc
+CC     = g++ #gcc
 CP     = g++
 NVCC   = nvcc
 RM     = rm
@@ -30,7 +30,7 @@ CPPFLAGS  = -Wall
 #
 
 NVARCH	   = 35
-NVFLAGS    = -G -g -arch=sm_$(NVARCH) -Xptxas -dlcm=ca#-lcurand #-lcublas 
+NVFLAGS    = -arch=sm_$(NVARCH) -Xptxas -dlcm=ca# -lcurand #-lcublas -G -g 
 
 #
 # Files to compile: 

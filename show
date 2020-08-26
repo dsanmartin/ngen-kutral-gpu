@@ -1,3 +1,3 @@
 #!/bin/bash
-python ../ngen-kutral/experiments/misc/show_gpu_sim.py gpu $1 $2
-
+# sim_id sim_number
+python ./src/py/plot.py $1 $2
