@@ -1,6 +1,24 @@
+/**
+ * @file diffmat.cu
+ * @author Daniel San Martin (dsanmartinreyes@gmail.com)
+ * @brief Build differentiation matrices in device
+ * @version 0.1
+ * @date 2020-09-01
+ * 
+ * @copyright Copyright (c) 2020
+ * 
+ */
+
 #include <stdlib.h>
 #include "include/diffmat.cuh"
 
+/**
+ * @brief Finite difference matrix for first derivative 
+ * 
+ * @param D1N Pointer to fill with the matrix
+ * @param M Size of rows/columns of array
+ * @param h \f$ \Delta x \f$ or \f$ \Delta y \f$
+ */
 __global__ void FD1Kernel(double *D1N, int M, double h) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < M * M) {
@@ -18,6 +36,13 @@ __global__ void FD1Kernel(double *D1N, int M, double h) {
     }
 }
 
+/**
+ * @brief Finite difference matrix for second derivative
+ * 
+ * @param D2N Pointer for the matrix
+ * @param M Number of rows/cols
+ * @param h \f$ Delta x \f$ or \f$ \Delta y \f$
+ */
 __global__ void FD2Kernel(double *D2N, int M, double h) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < M * M) {
@@ -35,6 +60,12 @@ __global__ void FD2Kernel(double *D2N, int M, double h) {
     }
 }
 
+/**
+ * @brief Fill array with Chebyshev nodes
+ * 
+ * @param x_c Pointer array
+ * @param N Number of nodes
+ */
 __global__ void ChebyshevNodes(double *x_c, int N) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < N + 1) {
@@ -42,6 +73,13 @@ __global__ void ChebyshevNodes(double *x_c, int N) {
     }
 }
 
+/**
+ * @brief Build first derivative Chebyshev matrix
+ * 
+ * @param CDM Pointer array to fill
+ * @param x_c Chebyshev nodes pointer
+ * @param N Number of nodes
+ */
 __global__ void ChebyshevMatrix(double *CDM, double *x_c, int N) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < (N + 1) * (N + 1)) {
@@ -62,6 +100,13 @@ __global__ void ChebyshevMatrix(double *CDM, double *x_c, int N) {
     }
 }
 
+/**
+ * @brief Compute second derivative Chebyshev differentiation matrix
+ * 
+ * @param CDM2 Pointer to fill with matrix
+ * @param CDM First derivative Chebyshev differentiation matrix
+ * @param N Number of nodes
+ */
 __global__ void Chebyshev2Matrix(double *CDM2, double *CDM, int N) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < (N + 1) * (N + 1)) {

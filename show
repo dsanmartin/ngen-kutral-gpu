@@ -1,3 +1,0 @@
-#!/bin/bash
-# sim_id sim_number
-python ./src/py/plot.py $1 $2

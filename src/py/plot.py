@@ -1,3 +1,6 @@
+"""Plot initial condition and last aproximation.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -13,19 +16,23 @@ Ua = Uaa.reshape((128, 128))
 Ba = Baa.reshape((128, 128))
 plt.figure(figsize=(8, 6))
 plt.subplot(2, 2, 1)
-plt.imshow(U0, origin="lower", extent=[0, 90, 0, 90], cmap=plt.cm.jet)
+plt.imshow(U0, origin="lower", 
+    extent=[0, 90, 0, 90], cmap=plt.cm.jet)
 plt.colorbar()
 #plt.show()
 plt.subplot(2, 2, 2)
-plt.imshow(B0, origin="lower", extent=[0, 90, 0, 90], cmap=plt.cm.Oranges)
+plt.imshow(B0, origin="lower", 
+    extent=[0, 90, 0, 90], cmap=plt.cm.Oranges)
 plt.colorbar()
 #plt.show()
 plt.subplot(2, 2, 3)
-plt.imshow(Ua, origin="lower", extent=[0, 90, 0, 90], cmap=plt.cm.jet)
+plt.imshow(Ua, origin="lower", 
+    extent=[0, 90, 0, 90], cmap=plt.cm.jet)
 plt.colorbar()
 #plt.show()
 plt.subplot(2, 2, 4)
-plt.imshow(Ba, origin="lower",  extent=[0, 90, 0, 90], cmap=plt.cm.Oranges)
+plt.imshow(Ba, origin="lower",  
+    extent=[0, 90, 0, 90], cmap=plt.cm.Oranges)
 plt.colorbar()
 plt.tight_layout()
 plt.show()

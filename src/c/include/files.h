@@ -1,3 +1,13 @@
+/**
+ * @file files.h
+ * @author Daniel San Martin (dsanmartinreyes@gmail.com)
+ * @brief File handler header
+ * @version 0.1
+ * @date 2020-09-01
+ * 
+ * @copyright Copyright (c) 2020
+ * 
+ */
 #ifndef FILES_H
 #define FILES_H
 

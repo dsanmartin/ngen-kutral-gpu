@@ -1,9 +1,27 @@
+/**
+ * @file diffmat.c
+ * @author Daniel San Martin (dsanmartinreyes@gmail.com)
+ * @brief Build differentiation matrices
+ * @version 0.1
+ * @date 2020-09-01
+ * 
+ * @copyright Copyright (c) 2020
+ * 
+ */
+
 #include <stdlib.h>
 #include <math.h>
 #include "include/diffmat.h"
 
 #define M_PI 3.14159265358979323846
 
+/**
+ * @brief Finite difference matrix for first derivative
+ * 
+ * @param D1N Pointer to fill with the matrix
+ * @param M Size of rows/columns of array
+ * @param h \f$ \Delta x \f$ or \f$ \Delta y \f$
+ */
 void FD1(double *D1N, int M, double h) {
     for (int i = 0; i < M; i++) {
         for (int j = 0; j < M; j++) {
@@ -18,6 +36,13 @@ void FD1(double *D1N, int M, double h) {
     D1N[2 * M - 1] = 1 / (2 * h);
 }
 
+/**
+ * @brief Finite difference matrix for second derivative
+ * 
+ * @param D2N Pointer for the matrix
+ * @param M Number of rows/cols
+ * @param h \f$ Delta x \f$ or \f$ \Delta y \f$
+ */
 void FD2(double *D2N, int M, double h) {
     for (int i = 0; i < M; i++) {
         for (int j = 0; j < M; j++) {
@@ -32,17 +57,24 @@ void FD2(double *D2N, int M, double h) {
     D2N[2 * M - 1] = 1 / (h * h);
 }
 
-
+/**
+ * @brief Chebyshev differentiation matrix
+ * 
+ * @param CDM Pointer to fill with matrix
+ * @param x_c Pointer to fill with Chebyshev nodes
+ * @param N Number of nodes
+ */
 void Chebyshev(double *CDM, double *x_c, int N) {
     double c_i, c_j;
-    /* Compute Chebyshev nodes */
-    for (int j=0; j <= N; j++) {
+
+    // Compute Chebyshev nodes 
+    for (int j = 0; j <= N; j++) {
         x_c[j] = cos(j * M_PI / N);
     }
 
-    /* Chebyshev differentiation matrix */
-    for (int i=0; i <= N; i++) {
-        for (int j=0; j <= N; j++) {
+    // Chebyshev differentiation matrix
+    for (int i = 0; i <= N; i++) {
+        for (int j = 0; j <= N; j++) {
             if (i == 0 && j == 0) {
                 CDM[j * (N + 1) + i] = (2.0 * N * N + 1.0) / 6.0;
             } else if (i == N && j == N) {

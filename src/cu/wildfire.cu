@@ -1,3 +1,14 @@
+/**
+ * @file wildfire.cu
+ * @author Daniel San Martin (dsanmartinreyes@gmail.com)
+ * @brief Wildfire simulations solver for GPU
+ * @version 0.1
+ * @date 2020-09-01
+ * 
+ * @copyright Copyright (c) 2020
+ * 
+ */
+ 
 #include <stdio.h>
 #include <time.h>
 #include "include/wildfire.cuh"
@@ -26,16 +37,34 @@ __device__ double b0(double x, double y) {
     return 1;
 }
 
-/* Vector field components */
+/**
+ * @brief Vector field first component
+ * 
+ * @param x \f$ x \f$ value
+ * @param y \f$ y \f$ value
+ */
 __device__ double v1(double x, double y) {
     return 0.70710678118;
 }
 
+/**
+ * @brief Vector field second component
+ * 
+ * @param x \f$ x \f$ value
+ * @param y \f$ y \f$ value
+ */
 __device__ double v2(double x, double y) {
     return 0.70710678118;
 }
 
-/* Temprature IC */
+/**
+ * @brief Temprature initial condition
+ * 
+ * @param parameters Model and numerical parameters
+ * @param U Pointer to temperature array
+ * @param x_ign x coordinate of ignition point
+ * @param y_ign y coordinate of ignition point
+ */
 __global__ void U0(Parameters parameters, double *U, double x_ign, double y_ign) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < parameters.N * parameters.M) {
@@ -48,7 +77,12 @@ __global__ void U0(Parameters parameters, double *U, double x_ign, double y_ign)
     }
 }
 
-/* Fuel IC */
+/**
+ * @brief Fuel initial condition
+ * 
+ * @param parameters Model and numerical parameters
+ * @param B Pointer to fuel array
+ */
 __global__ void B0(Parameters parameters, double *B) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     if (tId < parameters.N * parameters.M) {
@@ -61,7 +95,14 @@ __global__ void B0(Parameters parameters, double *B) {
     }
 }
 
-/* PDE RHS computation */
+/**
+ * @brief PDE RHS computation
+ * 
+ * @param parameters Model an numerical parameters
+ * @param DM Differentiation matrix structure 
+ * @param k Pointer to new array
+ * @param vec Pointer to old array
+ */
 __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *vec) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     int n_sim = parameters.x_ign_n * parameters.y_ign_n;
@@ -78,33 +119,33 @@ __global__ void RHSvec(Parameters parameters, DiffMats DM, double *k, double *ve
         double b_k = 0;
         if (!(i == 0 || i == parameters.M - 1 || j == 0 || j == parameters.N - 1)) {
 
-            /* Get actual value of approximations */
+            // Get actual value of approximations
             double u = vec[u_index];
             double b = vec[b_index];
 
-            /* Evaluate vector field */
+            // Evaluate vector field 
             double v_v1 = v1(buffer[j], buffer[parameters.N + i]);
             double v_v2 = v2(buffer[j], buffer[parameters.N + i]);
 
-            /* Get stencil */
+            // Get stencil 
             double u_r = vec[offset + (j+1) * parameters.M + i];
             double u_l = vec[offset + (j-1) * parameters.M + i];
             double u_u = vec[offset + j * parameters.M + i + 1];
             double u_d = vec[offset + j * parameters.M + i - 1];
 
-            /* Compute derivatives */
+            // Compute derivatives 
             double ux = (u_r - u_l) / (2 * parameters.dx);
             double uy = (u_u - u_d) / (2 * parameters.dy);
             double uxx = (u_r - 2 * u + u_l) / (parameters.dx * parameters.dx);
             double uyy = (u_u - 2 * u + u_d) / (parameters.dy * parameters.dy);
 
-            /* Compute temperature terms*/
+            // Compute temperature terms
             double diffusion = parameters.kappa * (uxx + uyy);
             double convection = v_v1 * ux + v_v2 * uy;
             double p = (u >= parameters.upc) * b * exp(u /(1 + parameters.epsilon * u));
             double reaction = p - parameters.alpha * u;
 
-            /* Compute PDE RHS */
+            // Compute PDE RHS 
             u_k = diffusion - convection + reaction;
             b_k = - (parameters.epsilon / parameters.q) * p;
         }
@@ -249,7 +290,16 @@ __global__ void RHSvec3(Parameters parameters, DiffMats DM, double *k, double *v
     // }
 }
 
-/* Element-wise sum */
+/**
+ * @brief Element-wise a + scalar * b
+ * 
+ * @param parameters Model and numerical parameters
+ * @param c Pointer to result array
+ * @param a Pointer to first array
+ * @param b Pointer to second array
+ * @param scalar Some scalar
+ * @param size Size of arrays
+ */
 __global__ void sumVector(Parameters parameters, double *c, double *a, double *b, double scalar, int size) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     while (tId < size) {
@@ -258,7 +308,16 @@ __global__ void sumVector(Parameters parameters, double *c, double *a, double *b
     }
 }
 
-/* Euler scheme for integration */
+/**
+ * @brief Euler scheme for integration
+ * 
+ * @param parameters Model and numerical parameters
+ * @param Y_new Pointer to new approximation
+ * @param Y_old Pointer to old approximation
+ * @param F Pointer to function evaluation
+ * @param dt \f$ \Delta t \f$
+ * @param size Y size
+ */
 __global__ void EulerScheme(Parameters parameters, double *Y_new, double *Y_old, double *F, double dt, int size) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
     while (tId < size) {
@@ -267,7 +326,19 @@ __global__ void EulerScheme(Parameters parameters, double *Y_new, double *Y_old,
     }
 }
 
-/* Runge-Kutta 4th order scheme for integration */
+/**
+ * @brief Runge-Kutta 4th order scheme for integration
+ * 
+ * @param parameters Model and numerical parameters
+ * @param Y_new Pointer to new approximation
+ * @param Y_old Pointer to old approximation
+ * @param k1 Pointer to k1 array
+ * @param k2 Pointer to k2 array
+ * @param k3 Pointer to k3 array
+ * @param k4 Pointer to k4 array
+ * @param dt \f$ \Delta t \f$
+ * @param size Y size
+ */
 __global__ void RK4Scheme(Parameters parameters, double *Y_new, double *Y_old, double *k1,
     double *k2, double *k3, double *k4, double dt, int size) {
     int tId = threadIdx.x + blockIdx.x * blockDim.x;
@@ -333,6 +404,7 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
             RK4Scheme<<<DG, DB>>>(parameters, d_Y, d_Y_tmp, d_k1, d_k2, d_k3, d_k4, dt, size);
         }
 
+        // Free memory
         cudaFree(d_Y_tmp);
         cudaFree(d_k1);
         cudaFree(d_k2);
@@ -342,8 +414,14 @@ void ODESolver(Parameters parameters, DiffMats DM, double *d_Y, double dt) {
     }
 }
 
+/**
+ * @brief Fill device memory with initial conditions
+ * 
+ * @param parameters Model and numerical parameters
+ * @param d_sims Pointer to fill 
+ */
 void fillInitialConditions(Parameters parameters, double *d_sims) {
-    /* Initial wildfire focus */
+    // Initial wildfire focus 
     double dx_ign = 0.0, dy_ign = 0.0, x_ign, y_ign;
 
     if (parameters.x_ign_n > 1) {
@@ -354,7 +432,7 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
         dy_ign = (parameters.y_ign_max - parameters.y_ign_min) / (parameters.y_ign_n - 1);
     }
 
-    /* Temporal arrays */
+    // Temporal arrays 
     double *d_tmp;
 
     //int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
@@ -362,7 +440,7 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
     cudaMalloc(&d_tmp, parameters.M * parameters.N * sizeof(double));
     cudaMemset(d_tmp, 0, parameters.M * parameters.N  * sizeof(double));
 
-    /* Fill initial conditions according to ignitions points */
+    // Fill initial conditions according to ignitions points 
     int sim_ = 0;
     for (int i=0; i < parameters.y_ign_n; i++) {
         for (int j=0; j < parameters.x_ign_n; j++) {
@@ -394,35 +472,44 @@ void fillInitialConditions(Parameters parameters, double *d_sims) {
     cudaFree(d_tmp);
 }
 
+/**
+ * @brief Wildfire handler
+ * 
+ * @param parameters Model and numerical parameters
+ */
 void wildfire(Parameters parameters) {
 
+    // Variables for times
+    clock_t begin, end;
     float milliseconds;
+    double time_spent;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    /* Kernel Parameters */
+    // Kernel Parameters 
     int n_sim = parameters.x_ign_n * parameters.y_ign_n; // Number of wildfire simulations
     int size = 2 * n_sim * parameters.M * parameters.N;
 
-    /* Domain differentials */
+    // Domain differentials 
     double dx = (parameters.x_max - parameters.x_min) / (parameters.N-1);
     double dy = (parameters.y_max - parameters.y_min) / (parameters.M-1);
     double dt = parameters.t_max / parameters.L;
 
-    /* Memory for simulations */
+    // Memory for simulations 
     double *h_sims = (double *) malloc(size * sizeof(double));
     double *d_sims;
 
-    /* Domain vectors */
+    // Domain vectors 
     double *h_x = (double *) malloc(parameters.N * sizeof(double));
     double *h_y = (double *) malloc(parameters.M * sizeof(double));
     double *d_x, *d_y;
 
+    // Print data log
     printf("Simulation ID: %s\n", parameters.sim_id);
     printf("Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);
 
-    /* Differentiation Matrices */
+    // Differentiation Matrices //
 
     // Struct for matrices
     DiffMats DM;
@@ -446,7 +533,7 @@ void wildfire(Parameters parameters) {
     cudaMalloc((void **) &d_Dyy, parameters.M * parameters.M * sizeof(double));
 
 
-    /* Fill spatial domain and differentiation matrices */
+    // Fill spatial domain and differentiation matrices 
     if (strcmp(parameters.spatial, "FD") == 0) {
         // Spatial domain
         printf("Finite Difference in space\n");
@@ -466,10 +553,11 @@ void wildfire(Parameters parameters) {
         FD2Kernel<<<DG, DB>>>(d_Dyy, parameters.M, dy);
 
     } else if (strcmp(parameters.spatial, "Cheb") == 0) {
+        /* TODO */
         // Spatial domain
         printf("Chebyshev in space\n");
         //fprintf(log, "Chebyshev in space\n");
-        /* REVISAR PARAMETROS M y N */
+        /* Check M y N */
 
         /*
         ChebyshevNodes<<<DG(parameters.M * parameters.N), DB>>>(d_x, parameters.N - 1);
@@ -488,28 +576,30 @@ void wildfire(Parameters parameters) {
 
     parameters.dt = dt;
 
-    /* Copy spatial domain to constant memory */
+    // Copy spatial domain to constant memory 
     cudaMemcpyToSymbol(buffer, d_x, parameters.N * sizeof(double), 0, cudaMemcpyDeviceToDevice);
     cudaMemcpyToSymbol(buffer, d_y, parameters.M * sizeof(double), parameters.N * sizeof(double), cudaMemcpyDeviceToDevice);
 
+    // Fill differentiation matrices
     DM.Dx = d_Dx;
     DM.Dy = d_Dy;
     DM.Dxx = d_Dxx;
     DM.Dyy = d_Dyy;
 
-    /* Fill initial conditions */
+    // Fill initial conditions 
     fillInitialConditions(parameters, d_sims);
 
+    // Save initial conditions
     if (parameters.save) {
         cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
         save(parameters, h_sims, 1);
     }
 
-    clock_t begin = clock();
-
+    // Timers
+    begin = clock();
     cudaEventRecord(start);
 
-    /* ODE Integration */
+    // ODE Integration (solver)
     ODESolver(parameters, DM, d_sims, dt);
 
     cudaEventRecord(stop);
@@ -518,21 +608,23 @@ void wildfire(Parameters parameters) {
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("Execution CUDA: %.16f\n", milliseconds*1e-3);
 
-    clock_t end = clock();
-    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    // Timers 
+    end = clock();
+    time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Execution time: %f [s]\n", time_spent);
 
+    // Write log file
     logFile(parameters, time_spent);
 
-    /* Copy approximations to host */
+    // Copy approximations to host
     cudaMemcpy(h_sims, d_sims, size * sizeof(double), cudaMemcpyDeviceToHost);
 
-    /* Save */
+    // Save approximations
     if (parameters.save) {
         save(parameters, h_sims, 0);
     }
 
-    /* Memory free */
+    // Free memory
     cudaFree(d_sims);
     cudaFree(d_x);
     cudaFree(d_y);

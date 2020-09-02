@@ -1,16 +1,33 @@
+/**
+ * @file files.c
+ * @author Daniel San Martin (dsanmartinreyes@gmail.com)
+ * @brief Output files handler
+ * @version 0.1
+ * @date 2020-09-01
+ * 
+ * @copyright Copyright (c) 2020
+ * 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "include/files.h"
 // #include "include/structures.h"
 
+/**
+ * @brief Generate log file
+ * 
+ * @param parameters Model and numerical parameters
+ * @param sim_time Execution time of simulations
+ */
 void logFile(Parameters parameters, double sim_time) {
-    /* Log file with parameters info */
+    // Log file with parameters info 
     char log_name[DIR_LEN + 8];
     sprintf(log_name, "%s/log.txt", parameters.dir);
     FILE *log = fopen(log_name, "w");
 
-    /* Write parameters in log */
+    // Write parameters in log 
     fprintf(log, "Simulation ID: %s\n", parameters.sim_id);
     fprintf(log, "Number of numerical simulations: %d\n", parameters.x_ign_n * parameters.y_ign_n);
     fprintf(log, "\nIgnition points\n");
@@ -35,11 +52,18 @@ void logFile(Parameters parameters, double sim_time) {
     fprintf(log, "dt: %f\n", parameters.dt);	
     fprintf(log, "\nExecution time: %f [s]\n", sim_time);
 
-    /* Close log file */
+    // Close log file
     fclose(log);
 }
 
-/* Print approximations matrices */
+/**
+ * @brief Print approximation matrices
+ * 
+ * @param A Pointer of matrix
+ * @param Nx Number of nodes in \f$ x \f$
+ * @param Ny Number of nodes in \f$ y \f$
+ * @param T Number of nodes in \f$ t \f$
+ */
 void printApproximations(const double *A, int Nx, int Ny, int T) {
     for (int k = 0; k < T; k++) {
         for (int i = 0; i < Ny; i++) {
@@ -53,7 +77,13 @@ void printApproximations(const double *A, int Nx, int Ny, int T) {
     printf("\n");
 }
 
-// Print matrix A(nr_rows_A, nr_cols_A) storage in column-major format
+/**
+ * @brief Print matrix A storage in column-major format
+ * 
+ * @param A Pointer to matrix
+ * @param rows Number of rows
+ * @param cols Number of columns
+ */
 void printMatrix(const double *A, int rows, int cols) {
     for(int i = 0; i < rows; i++){
         for(int j = 0; j < cols; j++){
@@ -64,43 +94,14 @@ void printMatrix(const double *A, int rows, int cols) {
     printf("\n");
 }
 
-/*
-void readConfig(const char *filename, int *Nx, int *Ny, double *xmin, double *xmax, double *ymin, double *ymax, 
-    int *Tmax, double *dt, double *kappa, double *epsilon, double *upc, double *q, double *alpha) {
-    FILE *file;
-    file = fopen(filename, "r");
-    fscanf(file, "%*s = %d", &Nx);
-    fscanf(file, "%*s = %d", &Ny);
-    fscanf(file, "%*s = %f", &xmin);
-    fscanf(file, "%*s = %f", &xmax);
-    fscanf(file, "%*s = %f", &ymin);
-    fscanf(file, "%*s = %f", &ymax);
-    fscanf(file, "%*s = %f", &dt);
-    fscanf(file, "%*s = %f", &kappa);
-    fscanf(file, "%*s = %f", &epsilon);
-    fscanf(file, "%*s = %f", &upc);
-    fscanf(file, "%*s = %f", &q);
-    fscanf(file, "%*s = %f", &alpha);
-    fscanf(file, "%*s = %d", &Tmax);
-    
-    printf("holas %d", Nx);
-    fclose(file);
-}
-*/
-
-/*
-void readConf(const char *filename) {
-    FILE *file;
-    file = fopen(filename, "r");
-    int *Nx, Ny, T;
-    double xmin, xmax, ymin, ymax;
-    fscanf(file, "%*s = %d", &Nx);
-    printf("hola %d", Nx);
-    fclose(file);
-}
-*/
-
-/* Read file to array */
+/**
+ * @brief Read file to array
+ * 
+ * @param filename File path name
+ * @param A Pointer to fill with data
+ * @param rows Number of matrix rows
+ * @param cols Number of matrix columns
+ */
 void readInput(const char *filename, double *A, int rows, int cols) {
     FILE *file;
     file = fopen(filename, "r");
@@ -113,7 +114,14 @@ void readInput(const char *filename, double *A, int rows, int cols) {
     fclose(file);
 }
 
-/* Save approximations matrices */
+/**
+ * @brief Save approximations matrices
+ * 
+ * @param filename File path name
+ * @param A Pointer to fill with data
+ * @param rows Number of matrix rows
+ * @param cols Number of matrix columns
+ */
 void saveApproximation(const char *filename, const double *A, int rows, int cols) {
     FILE *f = fopen(filename, "w");
     for (int i = 0; i < rows; i++) {
@@ -124,19 +132,26 @@ void saveApproximation(const char *filename, const double *A, int rows, int cols
     }
 }
 
+/**
+ * @brief Save initial condition or last approximation of each simulation
+ * 
+ * @param parameters Model and methods parameters
+ * @param h_sims Pointer with all simulations
+ * @param ic If save initial condition or last approximation
+ */
 void save(Parameters parameters, double *h_sims, int ic) {
-    /* Simulation name */
+    // Simulation name 
     char sim_name[DIR_LEN + 32];
 
     //int offset = parameters.x_ign_n * parameters.y_ign_n * parameters.M * parameters.N;
 
-    /* Temporal array */
+    // Temporal array 
     double *tmp = (double *) malloc(parameters.M * parameters.N * sizeof(double));
     
     int sim_ = 0;
-    for (int i=0; i < parameters.y_ign_n; i++) {
-        for (int j=0; j < parameters.x_ign_n; j++) {	
-            /* Temperature */
+    for (int i = 0; i < parameters.y_ign_n; i++) {
+        for (int j = 0; j < parameters.x_ign_n; j++) {	
+            // Temperature
             memcpy(tmp, h_sims + 2*sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
             // memcpy(h_tmp, h_sims + sim_*parameters.M*parameters.N, parameters.M * parameters.N * sizeof(double));
             memset(&sim_name[0], 0, sizeof(sim_name)); // Reset simulation name
