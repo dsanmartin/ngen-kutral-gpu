@@ -1,3 +1,14 @@
+/**
+ * @file diffmat.cuh
+ * @author Daniel San Martin (dsanmartinreyes@gmail.com)
+ * @brief Differentiation matrices header
+ * @version 0.1
+ * @date 2020-09-01
+ * 
+ * @copyright Copyright (c) 2020
+ * 
+ */
+ 
 #ifndef DIFFMAT_CUH
 #define DIFFMAT_CUH
 

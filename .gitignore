@@ -10,3 +10,13 @@ bin/
 test/
 test_bk/
 *.DS_Store
+
+# Running scripts
+run
+show
+
+# Doxygen folder/file
+doxygen-dark-theme-master/
+html/
+latex/
+Doxyfile

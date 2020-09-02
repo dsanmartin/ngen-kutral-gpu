@@ -12,7 +12,7 @@ EXE    = ngen-kutral
 # Executables
 #
 
-CC     = g++#gcc
+CC     = g++ #gcc
 CP     = g++
 NVCC   = nvcc
 RM     = rm
@@ -30,7 +30,7 @@ CPPFLAGS  = -Wall
 #
 
 NVARCH	   = 35
-NVFLAGS    = -G -g -arch=sm_$(NVARCH) -lcurand #-lcublas 
+NVFLAGS    = -arch=sm_$(NVARCH) -Xptxas -dlcm=ca# -lcurand #-lcublas -G -g 
 
 #
 # Files to compile: 
@@ -66,7 +66,9 @@ OBJMAIN = $(patsubst $(SRC)%.cu,$(DEST)%.o,$(SRCMAIN))
 # The MAGIC
 #
 
-all: directories $(BIN)$(EXE) clean
+all: directories $(BIN)$(EXE)
+
+.PHONY: clean
 
 $(BIN)$(EXE): $(OBJC) $(OBJCPP) $(OBJCU) $(OBJMAIN)
 	$(NVCC) $(NVFLAGS) $^ -o $@
@@ -101,7 +103,7 @@ clean:
 	$(RM) -rf $(DEST)
 
 fresh:
-	$(RM) -rf outputs/*
+	$(RM) -rf test/output/*
 
 distclean: clean
 	$(RM) -rf $(BIN)*
